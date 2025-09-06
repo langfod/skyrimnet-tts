@@ -2,7 +2,7 @@
 torch<2.9
 torchaudio
 
-coqui-tts[server,languages]
+coqui-tts[languages]
 
 gradio
 loguru

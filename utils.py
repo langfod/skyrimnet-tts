@@ -34,11 +34,8 @@ def get_cache_key(audio_path, uuid: int=0):
     if audio_path is None:
         return None
 
-    # Extract just the filename without extension as prefix
     try:
-        filename = Path(audio_path).stem  # Gets filename without extension
-        # Remove any temp directory prefixes, just keep the actual filename
-        cache_prefix = filename
+        cache_prefix = Path(audio_path).stem 
     except Exception:
         cache_prefix = "unknown"
 
@@ -48,13 +45,10 @@ def get_cache_key(audio_path, uuid: int=0):
     except (TypeError, ValueError):
         uuid_hex = str(uuid)
 
-
     cache_key = f"{cache_prefix}_{uuid_hex}"
-
     return cache_key
 
 def _save_as_json_to_disk(filename, data):
-    """Non-blocking worker function to save conditionals to disk"""
     try:
         with open(filename, "w") as new_file:
             json.dump(data, new_file)
@@ -65,11 +59,12 @@ def _save_as_json_to_disk(filename, data):
 def get_latent_from_audio(model, language, speaker_audio, speaker_audio_uuid):
     global latent_cache
 
-
     latent_dir = get_latent_dir(language=language)
-    latent_filename = latent_dir.joinpath(f"{get_cache_key(speaker_audio, speaker_audio_uuid)}.json")
-    if latent_cache.get(language) and latent_cache[language].get(get_cache_key(speaker_audio, speaker_audio_uuid)):
-        cached = latent_cache[language][get_cache_key(speaker_audio, speaker_audio_uuid)]
+    cache_file_key = get_cache_key(speaker_audio, speaker_audio_uuid)
+    latent_filename = latent_dir.joinpath(f"{cache_file_key}.json")
+
+    if latent_cache.get(language) and latent_cache[language].get(cache_file_key):
+        cached = latent_cache[language][cache_file_key]
         logger.info(f"Using in-memory cached latents for {Path(speaker_audio).stem} with UUID {speaker_audio_uuid}")
         return cached["gpt_cond_latent"], cached["speaker_embedding"]
     
@@ -77,16 +72,16 @@ def get_latent_from_audio(model, language, speaker_audio, speaker_audio_uuid):
         logger.info(f"Loading cached latents from {latent_filename}")
         with open(latent_filename, "r") as latent_file:
             latents = json.load(latent_file)
-        speaker_embedding = (torch.tensor(latents["speaker_embedding"]).unsqueeze(0).unsqueeze(-1))
-        gpt_cond_latent = (torch.tensor(latents["gpt_cond_latent"]).reshape((-1, 1024)).unsqueeze(0))  
+        speaker_embedding = torch.tensor(latents["speaker_embedding"]).to(device=model.device).unsqueeze(0).unsqueeze(-1)
+        gpt_cond_latent = torch.tensor(latents["gpt_cond_latent"]).to(device=model.device).reshape((-1, 1024)).unsqueeze(0)
         return gpt_cond_latent, speaker_embedding
     
     print(f"Computing latents for {speaker_audio} and caching to {latent_filename}")
     gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(audio_path=[speaker_audio])
-
+    print(f"Computed latents shapes: gpt_cond_latent={gpt_cond_latent.shape}, speaker_embedding={speaker_embedding.shape}")
     latents = {
-                "gpt_cond_latent": gpt_cond_latent.cpu().squeeze().half().tolist(),
-                "speaker_embedding": speaker_embedding.cpu().squeeze().half().tolist(),
+                "gpt_cond_latent": gpt_cond_latent.detach().squeeze().cpu().tolist(),
+                "speaker_embedding": speaker_embedding.detach().squeeze().cpu().tolist(),
               }
     
     threading.Thread(
@@ -100,21 +95,21 @@ def get_latent_from_audio(model, language, speaker_audio, speaker_audio_uuid):
     }
     return gpt_cond_latent, speaker_embedding
 
-def init_latent_cache():
+def init_latent_cache(model, supported_languages=None):
     """Initialize latent cache directories for supported languages."""
     global latent_cache
-    supported_languages = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja", "hu", "ko"]
     for lang in supported_languages:
         latent_dir = get_latent_dir(language=lang)
         for filename in latent_dir.glob("*.json"):
             with open(filename, "r") as latent_file:
                 latents = json.load(latent_file)
-                speaker_embedding = (torch.tensor(latents["speaker_embedding"]).unsqueeze(0).unsqueeze(-1))
-                gpt_cond_latent = (torch.tensor(latents["gpt_cond_latent"]).reshape((-1, 1024)).unsqueeze(0))  
+                speaker_embedding = torch.tensor(latents["speaker_embedding"]).to(device=model.device).unsqueeze(0).unsqueeze(-1)
+                gpt_cond_latent = torch.tensor(latents["gpt_cond_latent"]).to(device=model.device).reshape((-1, 1024)).unsqueeze(0)
             latent_cache.setdefault(lang, {})[filename.stem] = {
                 "speaker_embedding": speaker_embedding,
                 "gpt_cond_latent": gpt_cond_latent
             }
+    logger.info(f"Initialized latent cache with {sum(len(v) for v in latent_cache.values())} entries across languages: {list(latent_cache.keys())}")
 
 def get_latent_cache_keys():
     """Return a list of all cached latent keys."""

@@ -42,10 +42,7 @@ CURRENT_MODEL = None
 SPEAKER_EMBEDDING = None
 SPEAKER_AUDIO_PATH = None
 SPEAKER_AUDIO_PATH_DICT = {}
-
-
-
-
+SUPPORTED_LANGUAGE_CODES = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja", "hu", "ko"]
 
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
@@ -132,7 +129,6 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
 
 def build_interface():
     """Build and return the Gradio interface with cache management."""
-    supported_language_codes = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja", "hu", "ko"]
     with gr.Blocks(analytics_enabled=False, title="XTTS") as demo:
         gr.Markdown("# XTTS with Speaker Embedding Cache")
 
@@ -141,7 +137,7 @@ def build_interface():
                 text = gr.Textbox(label="Text to Synthesize",
                     value="Zonos uses eSpeak for text to phoneme conversion!",
                     lines=4, max_length=500)
-                language = gr.Dropdown(choices=supported_language_codes, value="en", label="Language Code", allow_custom_value=True)
+                language = gr.Dropdown(choices=SUPPORTED_LANGUAGE_CODES, value="en", label="Language Code", allow_custom_value=True)
 
             with gr.Column():
                 speaker_audio = gr.Audio(label="Optional Speaker Audio (for cloning)", type="filepath",sources=["upload", "microphone"], value="assets/malebrute.wav")
@@ -219,7 +215,7 @@ def load_model(model_name="xtts_v2", use_deepspeed=False, use_cpu=False):
 if __name__ == "__main__":
     CURRENT_MODEL = load_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed)
 
-    init_latent_cache()
+    init_latent_cache(model=CURRENT_MODEL, supported_languages=SUPPORTED_LANGUAGE_CODES)
     wav, _ = generate_audio(text="This is a test.", speaker_audio="assets/malebrute.wav", language="en")
 
     demo = build_interface()
