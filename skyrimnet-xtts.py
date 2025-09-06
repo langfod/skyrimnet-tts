@@ -111,6 +111,7 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     top_p=1.0,  # top_p if top_p else 1.0,
     top_k=50,   # top_k if top_k else 50,
     temperature=0.7,
+    enable_text_splitting=True,
     )
     wav_out_path = save_torchaudio_wav(wav_tensor=torch.tensor(wav_out["wav"]).unsqueeze(0), sr=24000, audio_path=speaker_audio, uuid=speaker_audio_uuid)
 
@@ -135,8 +136,8 @@ def build_interface():
         with gr.Row():
             with gr.Column():
                 text = gr.Textbox(label="Text to Synthesize",
-                    value="Zonos uses eSpeak for text to phoneme conversion!",
-                    lines=4, max_length=500)
+                    value="Now let's make my mum's favourite. So three mars bars into the pan. Then we add the tuna and just stir for a bit, just let the chocolate and fish infuse. A sprinkle of olive oil and some tomato ketchup. Now smell that. Oh boy this is going to be incredible.",
+                    lines=4)
                 language = gr.Dropdown(choices=SUPPORTED_LANGUAGE_CODES, value="en", label="Language Code", allow_custom_value=True)
 
             with gr.Column():
