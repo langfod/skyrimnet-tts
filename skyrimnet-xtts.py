@@ -141,7 +141,7 @@ def build_interface():
                 text = gr.Textbox(label="Text to Synthesize",
                     value="Zonos uses eSpeak for text to phoneme conversion!",
                     lines=4, max_length=500)
-                language = gr.Dropdown(choices=supported_language_codes, value="en", label="Language Code")
+                language = gr.Dropdown(choices=supported_language_codes, value="en", label="Language Code", allow_custom_value=True)
 
             with gr.Column():
                 speaker_audio = gr.Audio(label="Optional Speaker Audio (for cloning)", type="filepath",sources=["upload", "microphone"], value="assets/malebrute.wav")
