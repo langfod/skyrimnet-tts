@@ -100,9 +100,14 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     #if randomize_seed:
     #    seed = torch.randint(0, 2 ** 32 - 1, (1,)).item()
     #torch.manual_seed(seed)
-
+    
+    enable_text_splitting = False
+    if len(text) > CURRENT_MODEL.tokenizer.char_limits.get(language, 250):
+        logger.warning(f"Text length {len(text)} exceeds model limit for language '{language}'. Enabling text splitting.")
+        enable_text_splitting = True
+    
     gpt_cond_latent, speaker_embedding = get_latent_from_audio(CURRENT_MODEL, language, speaker_audio, speaker_audio_uuid)
-
+    
     wav_out = CURRENT_MODEL.inference(
     text=text, language=language,
     gpt_cond_latent=gpt_cond_latent,
@@ -111,7 +116,7 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     top_p=1.0,  # top_p if top_p else 1.0,
     top_k=50,   # top_k if top_k else 50,
     temperature=0.7,
-    enable_text_splitting=True,
+    enable_text_splitting=enable_text_splitting,
     )
     wav_out_path = save_torchaudio_wav(wav_tensor=torch.tensor(wav_out["wav"]).unsqueeze(0), sr=24000, audio_path=speaker_audio, uuid=speaker_audio_uuid)
 
