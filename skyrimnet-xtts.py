@@ -5,6 +5,7 @@ Enhanced with disk and memory caching for speaker embeddings
 """
 
 # Standard library imports
+import functools
 import os
 from pathlib import Path
 import sys
@@ -44,6 +45,14 @@ SPEAKER_AUDIO_PATH = None
 SPEAKER_AUDIO_PATH_DICT = {}
 SUPPORTED_LANGUAGE_CODES = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja", "hu", "ko"]
 
+# Cache flags - defaults that can be overridden by skyrimnet_config.txt
+ENABLE_DISK_CACHE = True
+ENABLE_MEMORY_CACHE = True
+_CONFIG_CACHE = None
+_CONFIG_FILE_PATH = "skyrimnet_config.txt"
+# Testing flag - when True, bypasses config loading and uses all API values
+_USE_API_MODE = False
+
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
@@ -58,12 +67,157 @@ parser.add_argument("--deepspeed", action='store_true')
 
 args = parser.parse_args()
 
+# =============================================================================
+# Support Functions
+# =============================================================================
+
+def load_skyrimnet_config():
+    """Load configuration from skyrimnet_config.txt with error handling"""
+    global _CONFIG_CACHE, ENABLE_MEMORY_CACHE, ENABLE_DISK_CACHE
+    
+    if _CONFIG_CACHE is not None:
+        return _CONFIG_CACHE
+    
+    # Default configuration
+    default_config = {
+        'temperature': 0.8,
+        'min_p': 0.07, 
+        'top_p': 1.0,
+        'repetition_penalty': 2.0,
+        'cfg_weight': 0.0,  # Speed optimized default
+        'exaggeration': 0.7
+    }
+    
+    global_flags = {
+        'enable_memory_cache': ENABLE_MEMORY_CACHE,
+        'enable_disk_cache': ENABLE_DISK_CACHE
+    }
+    
+    config_mode = {
+        'temperature': 'default',
+        'min_p': 'default',
+        'top_p': 'default', 
+        'repetition_penalty': 'default',
+        'cfg_weight': 'default',
+        'exaggeration': 'default'
+    }
+    
+    try:
+        config_path = Path(_CONFIG_FILE_PATH)
+        if not config_path.exists():
+            logger.warning(f"Config file {_CONFIG_FILE_PATH} not found, using hardcoded defaults")
+            _CONFIG_CACHE = (default_config, config_mode, global_flags)
+            return _CONFIG_CACHE
+            
+        with open(config_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            
+        for line in lines:
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith('#'):
+                continue
+                
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                # Handle global boolean flags
+                if key in global_flags:
+                    if value.lower() in ['true', 'yes', '1', 'on']:
+                        global_flags[key] = True
+                        # Update global variables
+                        if key == 'enable_memory_cache':
+                            ENABLE_MEMORY_CACHE = True
+                        elif key == 'enable_disk_cache':
+                            ENABLE_DISK_CACHE = True
+                        logger.info(f"Setting {key} to True")
+                    elif value.lower() in ['false', 'no', '0', 'off']:
+                        global_flags[key] = False
+                        # Update global variables
+                        if key == 'enable_memory_cache':
+                            ENABLE_MEMORY_CACHE = False
+                        elif key == 'enable_disk_cache':
+                            ENABLE_DISK_CACHE = False
+                        logger.info(f"Setting {key} to False")
+                    else:
+                        logger.warning(f"Invalid boolean value '{value}' for {key}, using default")
+                
+                # Handle parameter modes
+                elif key in config_mode:
+                    if value.lower() == 'default':
+                        config_mode[key] = 'default'
+                    elif value.lower() == 'api':
+                        config_mode[key] = 'api'
+                    else:
+                        try:
+                            custom_value = float(value)
+                            config_mode[key] = 'custom'
+                            default_config[key] = custom_value
+                            logger.info(f"Using custom {key} value: {custom_value}")
+                        except ValueError:
+                            logger.warning(f"Invalid value '{value}' for {key}, using default")
+                            
+        logger.info(f"Loaded config: {config_mode}")
+        logger.info(f"Global flags: {global_flags}")
+        _CONFIG_CACHE = (default_config, config_mode, global_flags)
+        return _CONFIG_CACHE
+        
+    except Exception as e:
+        logger.error(f"Error reading config file {_CONFIG_FILE_PATH}: {e}, using hardcoded defaults")
+        _CONFIG_CACHE = (default_config, config_mode, global_flags)
+        return _CONFIG_CACHE
+
+def get_config_value(param_name, api_value, defaults, modes, bypass_config=False):
+    """Get the appropriate value based on configuration mode"""
+    if bypass_config:
+        # API mode: use API value with fallback to reasonable defaults
+        fallback_defaults = {
+            'temperature': 0.9,
+            'min_p': 0.05,
+            'top_p': 1.0,
+            'repetition_penalty': 2.0,
+            'cfg_weight': 0.0,
+            'exaggeration': 0.55
+        }
+        return api_value if api_value is not None else fallback_defaults.get(param_name, 0.0)
+    
+    mode = modes.get(param_name, 'default')
+    
+    if mode == 'api':
+        return api_value if api_value is not None else defaults[param_name]
+    else:  # 'default' or 'custom'
+        return defaults[param_name]
+
+
+def reload_config():
+    """Force reload of configuration file"""
+    global _CONFIG_CACHE
+    _CONFIG_CACHE = None
+    return load_skyrimnet_config()
+
+
+def set_seed(seed: int):
+    """
+    Set random seeds for reproducible generation.
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+
+@functools.cache
+def cpp_uuid_to_seed(uuid_64: int) -> int:
+    """
+    Convert a 64-bit UUID to a valid PyTorch seed (0 to 2^32 - 1).
+    Uses hash() for better distribution across the seed space.
+    """
+    return abs(hash(uuid_64)) % (2**32)
+
 
 # =============================================================================
 # MAIN APPLICATION FUNCTIONS
 # =============================================================================
-
-
 
 
 def generate_audio(model_choice=None, text=None, language="en", speaker_audio=None, prefix_audio=None, e1=None, e2=None, e3=None, e4=None, e5=None, e6=None, e7=None, e8=None,
@@ -77,6 +231,12 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     logger.info(f"inputs: text={text}, language={language}, speaker_audio={Path(speaker_audio).stem if speaker_audio else 'None'}, seed={seed}")
     # Start timing the entire function
     func_start_time = time.perf_counter()
+
+    # Load config (or use empty values for API mode)
+    if _USE_API_MODE:
+        defaults, modes = {}, {}
+    else:
+        defaults, modes, flags = load_skyrimnet_config()
 
     # Convert parameters to appropriate types
     #speaker_noised_bool = bool(speaker_noised)
@@ -97,9 +257,9 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     global SPEAKER_AUDIO_PATH, SPEAKER_AUDIO_PATH_DICT, SPEAKER_EMBEDDING
 
     speaker_audio_uuid = seed
-    #if randomize_seed:
-    #    seed = torch.randint(0, 2 ** 32 - 1, (1,)).item()
-    #torch.manual_seed(seed)
+
+    seed =   torch.randint(0, 2**32 - 1, (1,)).item() if seed is None or randomize_seed else cpp_uuid_to_seed(seed)
+    torch.manual_seed(seed)
     
     enable_text_splitting = False
     if len(text) > CURRENT_MODEL.tokenizer.char_limits.get(language, 250):
