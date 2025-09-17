@@ -67,22 +67,30 @@ def get_latent_dir(language: str = "en") -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
+@functools.cache
+def get_speakers_dir(language: str = "en") -> Path:
+    """Get or create the speakers directory"""
+    speakers_dir = Path("speakers").joinpath(language)
+    speakers_dir.mkdir(parents=True, exist_ok=True)
+    return speakers_dir
 
 @functools.cache
-def get_cache_key(audio_path, uuid: int = 0):
+def get_cache_key(audio_path, uuid: int = None) -> Optional[str]:
     """Generate a cache key based on audio file, UUID"""
     if audio_path is None:
         return None
 
     cache_prefix = Path(audio_path).stem
+    if uuid:
+        # Convert UUID to hex string for readability
+        try:
+            uuid_hex = hex(uuid)[2:]  # Remove '0x' prefix
+        except (TypeError, ValueError):
+            uuid_hex = str(uuid)
 
-    # Convert UUID to hex string for readability
-    try:
-        uuid_hex = hex(uuid)[2:]  # Remove '0x' prefix
-    except (TypeError, ValueError):
-        uuid_hex = str(uuid)
-
-    cache_key = f"{cache_prefix}_{uuid_hex}"
+        cache_key = f"{cache_prefix}_{uuid_hex}"
+    else:
+        cache_key = cache_prefix    
     return cache_key
 
 
@@ -107,7 +115,7 @@ def _save_pt_to_disk(filename, data):
         logger.error(f"Failed to save data: {e}")
 
 
-def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audio_uuid: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audio_uuid: int = None, latents_only: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
     """Get or compute and cache latents for a given speaker audio file."""
     cache_file_key = get_cache_key(speaker_audio, speaker_audio_uuid)
 
@@ -119,37 +127,42 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
         return cached["gpt_cond_latent"], cached["speaker_embedding"]
 
     # Check disk cache
+
     latent_dir = get_latent_dir(language=language)
     latent_filename = latent_dir.joinpath(f"{cache_file_key}.pt")
     if latent_filename.is_file():
         logger.info(f"Loading cached latents from {latent_filename}")
         latents = load_pt_latents(latent_filename, model.device)
         # Store in memory cache for future use
+        if latents:
+            cache_manager.set(language, cache_file_key, latents)
+            return latents["gpt_cond_latent"], latents["speaker_embedding"]
+        
+    if not latents_only:
+        # Compute new latents
+        logger.info(
+            f"Computing latents for {speaker_audio} and caching to {latent_filename}")
+        gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(audio_path=[
+                                                                            speaker_audio])
+        logger.info(
+            f"Computed latents shapes: gpt_cond_latent={gpt_cond_latent.shape}, speaker_embedding={speaker_embedding.shape}")
+
+        latents = {"gpt_cond_latent": gpt_cond_latent,
+                   "speaker_embedding": speaker_embedding}
+
+        # Save to disk asynchronously
+        threading.Thread(
+            target=_save_pt_to_disk,
+            args=(latent_filename, latents),
+            daemon=True
+        ).start()
+
+        # Store in memory cache
         cache_manager.set(language, cache_file_key, latents)
-        return latents["gpt_cond_latent"], latents["speaker_embedding"]
-
-    # Compute new latents
-    logger.info(
-        f"Computing latents for {speaker_audio} and caching to {latent_filename}")
-    gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(audio_path=[
-                                                                        speaker_audio])
-    logger.info(
-        f"Computed latents shapes: gpt_cond_latent={gpt_cond_latent.shape}, speaker_embedding={speaker_embedding.shape}")
-
-    latents = {"gpt_cond_latent": gpt_cond_latent,
-               "speaker_embedding": speaker_embedding}
-
-    # Save to disk asynchronously
-    threading.Thread(
-        target=_save_pt_to_disk,
-        args=(latent_filename, latents),
-        daemon=True
-    ).start()
-
-    # Store in memory cache
-    cache_manager.set(language, cache_file_key, latents)
-    return gpt_cond_latent, speaker_embedding
-
+        return gpt_cond_latent, speaker_embedding
+    
+    # This really should not happen, but just in case
+    return None
 
 def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
     """Initialize latent cache from disk for all supported languages."""
@@ -182,7 +195,7 @@ def get_wavout_dir():
     return wavout_dir
 
 
-def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid):
+def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid: int = None) -> Path:
     """Save a tensor as a WAV file using torchaudio"""
 
     formatted_now_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

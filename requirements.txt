@@ -12,3 +12,21 @@ loguru
 #Deepspeed for Windows, CUDA 12.1, Python 3.12
 https://github.com/langfod/DeepSpeed/releases/download/v0.17.6w/deepspeed-0.17.6+1c39158a-cp312-cp312-win_amd64.whl
 
+# --- Optional dependencies -- #
+PyAudio
+requests
+pyttsx3
+stream2sentence
+fastapi
+loguru
+pydantic
+pydub
+python-dotenv
+
+uvicorn
+cutlet
+fugashi[unidic-lite]
+
+transformers
+
+python-multipart

@@ -54,3 +54,5 @@ memory.json
 /output_temp
 /cache
 /latents
+/logs
+/latent_speaker_folder
