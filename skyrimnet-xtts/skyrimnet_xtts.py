@@ -6,36 +6,29 @@ Enhanced with disk and memory caching for speaker embeddings
 
 # Standard library imports
 import functools
-import os
 from pathlib import Path
 import sys
 import time
-import argparse
-from loguru import logger
+
 
 # Third-party imports
 import gradio as gr
-import os
 import time
-
-from TTS.utils.manage import ModelManager
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import Xtts
 import torch
+from loguru import logger
 from utils import get_latent_from_audio, init_latent_cache, save_torchaudio_wav
+
+# Shared module imports
+from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG
+from shared_models import load_model, check_text_length
+from shared_args import parse_gradio_args
 
 # =============================================================================
 # GLOBAL CONFIGURATION AND CONSTANTS
 # =============================================================================
-# Fix torch.compile C++ compilation issues on Windows
-if sys.platform == "win32":
-    os.environ["TORCH_COMPILE_CPP_FORCE_X64"] = "1"
-    # Alternative approach - force specific compiler architecture
-    os.environ["DISTUTILS_USE_SDK"] = "1"
-    os.environ["MSSdk"] = "1"
 
-os.environ["COQUI_TOS_AGREED"] = "1"
-os.environ["TTS_HOME"] = "models"
+# Initialize environment
+setup_environment()
 
 # Global model state
 CURRENT_MODEL_TYPE = None
@@ -43,11 +36,10 @@ CURRENT_MODEL = None
 SPEAKER_EMBEDDING = None
 SPEAKER_AUDIO_PATH = None
 SPEAKER_AUDIO_PATH_DICT = {}
-SUPPORTED_LANGUAGE_CODES = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja", "hu", "ko"]
 
 # Cache flags - defaults that can be overridden by skyrimnet_config.txt
-ENABLE_DISK_CACHE = True
-ENABLE_MEMORY_CACHE = True
+ENABLE_DISK_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_DISK_CACHE"]
+ENABLE_MEMORY_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_MEMORY_CACHE"]
 _CONFIG_CACHE = None
 _CONFIG_FILE_PATH = "skyrimnet_config.txt"
 # Testing flag - when True, bypasses config loading and uses all API values
@@ -57,15 +49,7 @@ _USE_API_MODE = False
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--share', action='store_true')
-parser.add_argument("--server", type=str, default='0.0.0.0')
-parser.add_argument("--port", type=int, required=False)
-parser.add_argument("--inbrowser", action='store_true')
-parser.add_argument("--use_cpu", action='store_true')
-parser.add_argument("--deepspeed", action='store_true')
-
-args = parser.parse_args()
+args = parse_gradio_args("Zonos Text-to-Speech Application with Gradio Interface")
 
 # =============================================================================
 # Support Functions
@@ -258,13 +242,12 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
 
     speaker_audio_uuid = seed
 
-    seed =   torch.randint(0, 2**32 - 1, (1,)).item() if seed is None or randomize_seed else cpp_uuid_to_seed(seed)
+    seed = torch.randint(0, 2**32 - 1, (1,)).item() if seed is None or randomize_seed else cpp_uuid_to_seed(seed)
     torch.manual_seed(seed)
     
-    enable_text_splitting = False
-    if len(text) > CURRENT_MODEL.tokenizer.char_limits.get(language, 250):
-        logger.warning(f"Text length {len(text)} exceeds model limit for language '{language}'. Enabling text splitting.")
-        enable_text_splitting = True
+    enable_text_splitting, char_limit = check_text_length(text, CURRENT_MODEL, language)
+    if enable_text_splitting:
+        logger.warning(f"Text length {len(text)} exceeds limit {char_limit} for language '{language}'. Enabling text splitting.")
     
     gpt_cond_latent, speaker_embedding = get_latent_from_audio(CURRENT_MODEL, language, speaker_audio, speaker_audio_uuid)
     
@@ -295,6 +278,7 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
 
 def build_interface():
     """Build and return the Gradio interface with cache management."""
+    gr.set_static_paths(["output_temp"])
     with gr.Blocks(analytics_enabled=False, title="XTTS") as demo:
         gr.Markdown("# XTTS with Speaker Embedding Cache")
 
@@ -364,19 +348,6 @@ def build_interface():
 # =============================================================================
 # MAIN EXECUTION
 # =============================================================================
-
-def load_model(model_name="xtts_v2", use_deepspeed=False, use_cpu=False):
-    output_model_path, output_config_path, model_item = ModelManager().download_model(model_name)
-    config = XttsConfig()
-    config.load_json(output_config_path)
-    model = Xtts.init_from_config(config)
-    if use_cpu:
-        model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=False)
-        model.cpu()
-    else:
-        model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed)
-        model.cuda()
-    return model
 
 if __name__ == "__main__":
     CURRENT_MODEL = load_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed)

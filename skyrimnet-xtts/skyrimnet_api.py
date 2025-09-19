@@ -9,65 +9,46 @@ Simplified FastAPI service modeling APIs from xtts_api_server but using methodol
 import os
 import sys
 import tempfile
-import shutil
 from pathlib import Path
 from typing import Optional, Tuple
-from argparse import ArgumentParser
 
 # Third-party imports
 import uvicorn
 import torch
 import time
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form, BackgroundTasks, Request, Response
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from loguru import logger
 
-# TTS imports
-from TTS.utils.manage import ModelManager
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import Xtts
-
 # Local imports
-from utils import get_latent_dir, get_latent_from_audio, get_speakers_dir, init_latent_cache, save_torchaudio_wav
+from utils import get_latent_from_audio, get_speakers_dir, init_latent_cache, save_torchaudio_wav
+from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_TTS_PARAMS, validate_language
+from shared_models import load_model, setup_model_seed, validate_model_state, check_text_length
+from shared_args import parse_api_args
 
 # =============================================================================
 # GLOBAL CONFIGURATION AND CONSTANTS
 # =============================================================================
 
-# Fix torch.compile C++ compilation issues on Windows
-if sys.platform == "win32":
-    os.environ["TORCH_COMPILE_CPP_FORCE_X64"] = "1"
-    os.environ["DISTUTILS_USE_SDK"] = "1" 
-    os.environ["MSSdk"] = "1"
-
-os.environ["COQUI_TOS_AGREED"] = "1"
-os.environ["TTS_HOME"] = "models"
+# Initialize environment
+setup_environment()
 
 # Global model state
 CURRENT_MODEL = None
-SUPPORTED_LANGUAGE_CODES = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja", "hu", "ko"]
 
-# Hardcoded constants for Phase 1
-ENABLE_DISK_CACHE = True
-ENABLE_MEMORY_CACHE = True
-DEFAULT_TEMPERATURE = 0.7
-DEFAULT_TOP_P = 1.0
-DEFAULT_TOP_K = 50
-DEFAULT_SPEED = 1.0
+# Hardcoded constants for Phase 1 (using shared defaults)
+DEFAULT_TEMPERATURE = DEFAULT_TTS_PARAMS["TEMPERATURE"]
+DEFAULT_TOP_P = DEFAULT_TTS_PARAMS["TOP_P"]
+DEFAULT_TOP_K = DEFAULT_TTS_PARAMS["TOP_K"]
+DEFAULT_SPEED = DEFAULT_TTS_PARAMS["SPEED"]
 
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
 
-parser = ArgumentParser(description="SkyrimNet Simplified TTS API")
-parser.add_argument("--server", type=str, default="localhost", help="Server host")
-parser.add_argument("--port", type=int, default=8020, help="Server port")
-parser.add_argument("--use_cpu", action="store_true", help="Use CPU instead of CUDA")
-parser.add_argument("--deepspeed", action="store_true", help="Use DeepSpeed optimization")
-
-args = parser.parse_args()
+args = parse_api_args("SkyrimNet Simplified TTS API")
 
 # =============================================================================
 # LOGGING SETUP
@@ -121,26 +102,6 @@ class ErrorResponse(BaseModel):
 # UTILITY FUNCTIONS
 # =============================================================================
 
-def load_model(model_name="xtts_v2", use_deepspeed=False, use_cpu=False):
-    """Load XTTS model with configuration matching skyrimnet-xtts.py"""
-    logger.info(f"Loading model: {model_name}, use_deepspeed: {use_deepspeed}, use_cpu: {use_cpu}")
-    
-    output_model_path, output_config_path, model_item = ModelManager().download_model(model_name)
-    config = XttsConfig()
-    config.load_json(output_config_path)
-    model = Xtts.init_from_config(config)
-    
-    if use_cpu:
-        model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=False)
-        model.cpu()
-        logger.info("Model loaded on CPU")
-    else:
-        model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed)
-        model.cuda()
-        logger.info("Model loaded on CUDA")
-    
-    return model
-
 def get_latents_from_speaker_path(speaker_wav: str, language: str, model) -> Tuple[torch.Tensor, torch.Tensor]:
     """Get latents from speaker path - either from cache or by computing from audio file"""
     if not speaker_wav:
@@ -171,7 +132,7 @@ def get_latents_from_speaker_path(speaker_wav: str, language: str, model) -> Tup
 app = FastAPI(title="SkyrimNet TTS API", description="Simplified TTS API service", version="1.0.0")
 
 # Request logging middleware (logs ALL requests, even undefined endpoints)
-@app.middleware("http")
+#@app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     
@@ -234,7 +195,7 @@ app.add_middleware(
 # =============================================================================
 
 
-@app.post("/tts_to_audio")
+##@app.post("/tts_to_audio")
 @app.post("/tts_to_audio/")
 async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTasks):
     """
@@ -252,9 +213,10 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
         if not request.text:
             raise HTTPException(status_code=400, detail="Text is required")
         
-        language = request.language.split("-")[0] if request.language else "en"
-        if language not in SUPPORTED_LANGUAGE_CODES:
-            raise HTTPException(status_code=400, detail=f"Language '{language}' not supported")
+        try:
+            language = validate_language(request.language or "en")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         if request.text == "ping" and (request.speaker_wav == 'maleeventoned' or request.speaker_wav == 'player voice'):
             return FileResponse(
@@ -266,11 +228,10 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
         # Get latents from speaker
         gpt_cond_latent, speaker_embedding = get_latents_from_speaker_path(request.speaker_wav, language, CURRENT_MODEL)
         
-        # Enable text splitting for long texts
-        enable_text_splitting = False
-        if len(request.text) > CURRENT_MODEL.tokenizer.char_limits.get(language, 250):
-            enable_text_splitting = True
-            logger.info("Text is long, enabling text splitting")
+        # Check text length and enable splitting if needed
+        enable_text_splitting, char_limit = check_text_length(request.text, CURRENT_MODEL, language)
+        if enable_text_splitting:
+            logger.info(f"Text length {len(request.text)} exceeds limit {char_limit}, enabling text splitting")
         
         # Generate audio
         logger.info("Running model inference...")
@@ -299,9 +260,7 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
             path=str(wav_out_path),
             filename=request.save_path,
             media_type="audio/wav"
-        )
-
-            
+        )            
     except HTTPException:
         raise
     except Exception as e:
@@ -309,8 +268,6 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/create_and_store_latents")
-@app.post("/create_and_store_latents/")
-
 async def create_and_store_latents(
     speaker_name: str = Form(...),
     language: str = Form("en"),
@@ -326,8 +283,10 @@ async def create_and_store_latents(
             raise HTTPException(status_code=500, detail="Model not loaded")
         
         # Validate language
-        if language not in SUPPORTED_LANGUAGE_CODES:
-            raise HTTPException(status_code=400, detail=f"Language '{language}' not supported")
+        try:
+            language = validate_language(language)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         
         # Validate file type
         if not wav_file.filename.endswith('.wav'):
@@ -384,39 +343,36 @@ async def health_check():
         "supported_languages": SUPPORTED_LANGUAGE_CODES
     }
 
-## Catch-all route for undefined endpoints (must be last)
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
-async def catch_undefined_endpoints(request: Request, path: str):
-    """
-    Catch-all route to log attempts to access undefined endpoints
-    This helps with debugging missing routes and API discovery
-    """
-    logger.warning(f"🚫 UNDEFINED ENDPOINT: {request.method} /{path}")
-    logger.warning(f"   Full URL: {request.url}")
-    logger.warning(f"   Available endpoints:")
-    logger.warning(f"     POST /tts_to_audio")
-    logger.warning(f"     POST /tts_to_audio/")
-    logger.warning(f"     POST /create_and_store_latents") 
-    logger.warning(f"     POST /create_and_store_latents/")
-    logger.warning(f"     GET  /health")
-    logger.warning(f"     GET  /docs (Swagger UI)")
-    logger.warning(f"     GET  /redoc (ReDoc)")
-    
-    raise HTTPException(
-        status_code=404, 
-        detail={
-            "error": f"Endpoint not found: {request.method} /{path}",
-            "available_endpoints": [
-                "POST /tts_to_audio",
-                "POST /tts_to_audio/",
-                "POST /create_and_store_latents",
-                "POST /create_and_store_latents/",
-                "GET /health",
-                "GET /docs",
-                "GET /redoc"
-            ]
-        }
-    )
+
+### Catch-all route for undefined endpoints (must be last)
+#@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+#async def catch_undefined_endpoints(request: Request, path: str):
+#    """
+#    Catch-all route to log attempts to access undefined endpoints
+#    This helps with debugging missing routes and API discovery
+#    """
+#    logger.warning(f"🚫 UNDEFINED ENDPOINT: {request.method} /{path}")
+#    logger.warning(f"   Full URL: {request.url}")
+#    logger.warning(f"   Available endpoints:")
+#    logger.warning(f"     POST /tts_to_audio")
+#    logger.warning(f"     POST /create_and_store_latents") 
+#    logger.warning(f"     GET  /health")
+#    logger.warning(f"     GET  /docs (Swagger UI)")
+#    logger.warning(f"     GET  /redoc (ReDoc)")
+#    
+#    raise HTTPException(
+#        status_code=404, 
+#        detail={
+#            "error": f"Endpoint not found: {request.method} /{path}",
+#            "available_endpoints": [
+#                "POST /tts_to_audio",
+#                "POST /create_and_store_latents",
+#                "GET /health",
+#                "GET /docs",
+#                "GET /redoc"
+#            ]
+#        }
+#    )
 
 # =============================================================================
 # MAIN EXECUTION
@@ -428,7 +384,13 @@ if __name__ == "__main__":
     # Load model
     try:
         CURRENT_MODEL = load_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed)
-        torch.manual_seed(5272025)
+        
+        # Setup model seed for reproducibility
+        setup_model_seed(5272025)
+        
+        # Validate model state
+        validate_model_state(CURRENT_MODEL)
+        
         # Initialize latent cache
         init_latent_cache(model=CURRENT_MODEL, supported_languages=SUPPORTED_LANGUAGE_CODES)
         

@@ -1,10 +1,13 @@
 
 
-Windows setup meant for use with SkyrimNet either locally (or local secondary PC) install of coqui-ai-TTS using the "Zonos" endpoint. 
+Windows setup meant for use with SkyrimNet either locally (or local secondary PC) install using coqui-ai-TTS using either the "XTTS" or "Zonos" endpoints. 
 - should support Blackwell cards
 - model files in `models` folder
-- latents in `latents` folder by language type
+- latents in `latents_pt` folder by language type (no json support)
+- wav files in speakers/[language] will be converted once on startup
 - output files saved in `output_temp` folder under process timestamp folders
+- default server is at http://localhost:7860
+- Gradio UI is available there also.
 
 Based on [coqui-ai-TTS](https://github.com/idiap/coqui-ai-TTS)
 
@@ -39,3 +42,11 @@ Currently hardcoded as the default values in the SkyrimNet Zonos configuration d
 remove the bit like (1.0,  #) in lines 113-117 in skyrimnet-xtts.py and then they can be controlled in the SkyrimNet UI
 
 ---
+
+To run by hand:
+
+py -3.12 -m venv .venv
+.venv\scripts\activate
+pip install -r requirements.txt
+
+python -m skyrimnet-xtts

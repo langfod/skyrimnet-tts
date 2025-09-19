@@ -47,7 +47,7 @@ function Show-Banner {
  Y8a     a8P  88`"Yba,    `8b,d8'    88          88  88      88      88  88     `8888  "8b,   ,aa    88,    
   "Y88888P"   88   `Y8a     Y88'     88          88  88      88      88  88      `888   `"Ybbd8"'    "Y888  
                             d8'                                               
-                           d8'       XTTS (Zonos Emulated)                                       
+                           d8'       XTTS (XTTS / Gradio / Zonos Emulated)                                       
  
 '@
 
@@ -105,10 +105,10 @@ if (Test-Path $venvPython) {
     }
 }
 
-# Script to run (relative to repo root)
-$scriptToRun = Join-Path $scriptRoot 'skyrimnet-xtts.py'
-if (-not (Test-Path $scriptToRun)) {
-    Write-Host "Could not find script: $scriptToRun" -ForegroundColor Red
+# Module to run (relative to repo root)
+$moduleToRun = Join-Path $scriptRoot 'skyrimnet-xtts'
+if (-not (Test-Path $moduleToRun)) {
+    Write-Host "Could not find module: $moduleToRun" -ForegroundColor Red
     Read-Host -Prompt "Press Enter to exit"
     exit 1
 }
@@ -128,15 +128,15 @@ if ($deepspeed) {
     }
 }
 
-# Start a new PowerShell window, set the console title, and run the python script inside it.
+# Start a new PowerShell window, set the console title, and run the python module inside it.
 if ($pythonArgs) {
-    Write-Host "Starting new PowerShell window to run: $pythonPath $scriptToRun $pythonArgs"
+    Write-Host "Starting new PowerShell window to run: $pythonPath -m skyrimnet-xtts $pythonArgs"
 } else {
-    Write-Host "Starting new PowerShell window to run: $pythonPath $scriptToRun"
+    Write-Host "Starting new PowerShell window to run: $pythonPath -m skyrimnet-xtts"
 }
 
 # Build the command to run inside the new PowerShell instance. Escape $Host so it's evaluated by the child PowerShell.
-$psCommand = "`$Host.UI.RawUI.WindowTitle = 'SkyrimNet XTTS'; $vsInitCommand & '$pythonPath' '$scriptToRun' $pythonArgs"
+$psCommand = "`$Host.UI.RawUI.WindowTitle = 'SkyrimNet XTTS'; $vsInitCommand & '$pythonPath' -m skyrimnet-xtts $pythonArgs"
 
 # Launch PowerShell in a new window and keep it open (-NoExit) so errors remain visible.
 $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoExit','-Command',$psCommand) -WorkingDirectory $scriptRoot -PassThru
@@ -148,6 +148,6 @@ try {
     Write-Host "Warning: failed to set process priority: $_" -ForegroundColor Yellow
 }
 
-Write-Host "`nSkyrimNet ChatterBox should start in another window." -ForegroundColor Green
-Write-Host "If that window closes immediately, run $scriptToRun to capture errors." -ForegroundColor Yellow
+Write-Host "`nSkyrimNet XTTS should start in another window. Default web server is http://localhost:7860" -ForegroundColor Green
+Write-Host "If that window closes immediately, run '.venv\Scripts\python -m skyrimnet-xtts' to capture errors." -ForegroundColor Yellow
 Any_Key_Wait -msg "Otherwise, you may close this window if it does not close itself.`n" -wait_sec 20

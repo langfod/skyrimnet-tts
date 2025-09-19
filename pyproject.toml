@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skyrimnet-tts"
+version = "0.1.0"
+description = "SkyrimNet Text-to-Speech system with XTTS support"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "SkyrimNet Team"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "torch<2.9",
+    "torchaudio",
+    "Setuptools>80,<81",
+    "numpy",
+    "spacy",
+    "spacy[cuda12x]",
+    "coqui-tts[languages]",
+    "pydantic",
+    "gradio",
+    "loguru",
+    "uvicorn",
+    "deepspeed",
+]
+
+[project.optional-dependencies]
+cuda = [
+    "spacy[cuda12x]",
+]
+
+
+[project.urls]
+Homepage = "https://github.com/langfod/skyrimnet-tts"
+Repository = "https://github.com/langfod/skyrimnet-tts"
+Issues = "https://github.com/langfod/skyrimnet-tts/issues"
+
+[project.scripts]
+skyrimnet-tts = "skyrimnet_xtts:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["skyrimnet-xtts*"]
+
+# uv configuration for PyTorch CUDA and custom DeepSpeed wheel
+[tool.uv.sources]
+# Pin torch and torchaudio to the PyTorch CUDA index
+torch = { index = "pytorch-cu129" }
+torchaudio = { index = "pytorch-cu129" }
+# Use custom DeepSpeed wheel
+deepspeed = { url = "https://github.com/langfod/DeepSpeed/releases/download/v0.17.6w/deepspeed-0.17.6+1c39158a-cp312-cp312-win_amd64.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true

@@ -63,7 +63,7 @@ def get_process_creation_time():
 @functools.cache
 def get_latent_dir(language: str = "en") -> Path:
     """Get or create the conditionals cache directory"""
-    cache_dir = Path("latents").joinpath(language)
+    cache_dir = Path("latents_pt").joinpath(language)
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
@@ -166,16 +166,26 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
 
 def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
     """Initialize latent cache from disk for all supported languages."""
+    cached_latents = {}
     for lang in supported_languages:
         latent_dir = get_latent_dir(language=lang)
         for filename in latent_dir.glob("*.pt"):
             try:
+                cached_latents[lang] = filename.stem
                 latents = load_pt_latents(filename, model.device)
-                logger.info(
-                    f"Loaded latent shapes: gpt_cond_latent={latents['gpt_cond_latent'].shape}, speaker_embedding={latents['speaker_embedding'].shape}")
+                #logger.info(f"Loaded latent shapes: gpt_cond_latent={latents['gpt_cond_latent'].shape}, speaker_embedding={latents['speaker_embedding'].shape}")
                 cache_manager.set(lang, filename.stem, latents)
             except Exception as e:
                 logger.error(f"Failed to load latents from {filename}: {e}")
+        speaker_dir = get_speakers_dir(language=lang)
+        for speaker_wav_wav in speaker_dir.glob("*.wav"):
+            if speaker_wav_wav.stem in cached_latents.get(lang, []):
+                continue # Already cached from .pt file
+            try:
+                latents = get_latent_from_audio(model, lang, str(speaker_wav_wav))
+                cache_manager.set(lang, speaker_wav_wav.stem, latents)
+            except Exception as e:
+                logger.error(f"Failed to load latents from speaker{speaker_wav_wav}: {e}")
 
     stats = cache_manager.get_stats()
     logger.info(
