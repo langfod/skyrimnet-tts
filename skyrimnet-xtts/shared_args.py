@@ -26,12 +26,9 @@ COMMON_ARGS = {
     "--use_cpu": {
         "action": "store_true",
         "help": "Use CPU instead of CUDA for model inference"
-    },
-    "--deepspeed": {
-        "action": "store_true", 
-        "help": "Use DeepSpeed optimization for faster inference"
     }
 }
+
 
 # Default values per application type
 DEFAULT_VALUES = {
@@ -184,7 +181,6 @@ def validate_args(args: argparse.Namespace, app_type: str) -> argparse.Namespace
         # Ensure API has a port specified
         if not hasattr(args, 'port') or args.port is None:
             raise ValueError("API applications must specify a port")
-    
     return args
 
 

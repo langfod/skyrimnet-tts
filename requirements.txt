@@ -3,18 +3,11 @@ torch<2.9
 torchaudio
 
 
-#Deepspeed for Windows, CUDA 12.1, Python 3.12
-https://github.com/langfod/DeepSpeed/releases/download/v0.17.6w/deepspeed-0.17.6+1c39158a-cp312-cp312-win_amd64.whl
-
 numpy
-####
-       
+psutil
 
-####
-spacy
-spacy[cuda12x]
-coqui-tts[languages]
 pydantic
-gradio
 loguru
 uvicorn
+coqui-tts[languages]
+gradio

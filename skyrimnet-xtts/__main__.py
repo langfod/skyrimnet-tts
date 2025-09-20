@@ -21,7 +21,7 @@ from gradio.routes import mount_gradio_app
 from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES
 from shared_models import load_model, setup_model_seed, validate_model_state
 from shared_args import parse_api_args
-from utils import init_latent_cache
+from utils import init_latent_cache, get_wavout_dir, get_latent_dir, get_speakers_dir
 
 import skyrimnet_api
 import skyrimnet_xtts as skyrimnet_gradio
@@ -64,19 +64,24 @@ def initialize_logging():
 def initialize_configuration():
     """Initialize environment and configuration"""
     setup_environment()
+    output_temp = get_wavout_dir().parent.absolute()
+    latents_dir = get_latent_dir().parent.absolute()
+    speakers_dir = get_speakers_dir().parent.absolute()
+
+    os.environ["GRADIO_ALLOWED_PATHS"] = f'"{output_temp}","{latents_dir}","{speakers_dir}"'
     logger.info("Environment initialized")
 
 
-def initialize_model(use_cpu=False, use_deepspeed=False):
+def initialize_model(use_cpu=False):
     """Initialize and load the TTS model"""
     logger.info("Starting model initialization...")
     
     try:
         # Load model
-        model = load_model(use_cpu=use_cpu, use_deepspeed=use_deepspeed)
+        model = load_model(use_cpu=use_cpu)
         
         # Setup model seed for reproducibility
-        setup_model_seed(5272025)
+        setup_model_seed(20250527)
         
         # Validate model state
         validate_model_state(model)
@@ -132,7 +137,7 @@ if __name__ == "__main__":
     
     # Initialize model
     try:
-        model = initialize_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed)
+        model = initialize_model(use_cpu=args.use_cpu)
     except Exception as e:
         logger.error(f"Model initialization failed: {e}")
         sys.exit(1)

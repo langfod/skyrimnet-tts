@@ -2,7 +2,7 @@ import functools
 import threading
 import psutil
 import torch
-import datetime
+from datetime import datetime, timezone
 import torchaudio
 import os
 import warnings
@@ -56,8 +56,7 @@ cache_manager = LatentCacheManager()
 def get_process_creation_time():
     """Get the process creation time as a datetime object"""
     p = psutil.Process(os.getpid())
-    creation_timestamp = p.create_time()
-    return datetime.datetime.fromtimestamp(creation_timestamp)
+    return datetime.fromtimestamp(p.create_time())
 
 
 @functools.cache
@@ -142,8 +141,19 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
         # Compute new latents
         logger.info(
             f"Computing latents for {speaker_audio} and caching to {latent_filename}")
-        gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(audio_path=[
-                                                                            speaker_audio])
+        
+        # get_conditioning_latents returns a tuple (gpt_cond_latent, speaker_embedding)
+        latent_result = model.get_conditioning_latents(audio_path=[speaker_audio])
+        
+        # Handle both tuple and potential dict return types for compatibility
+        if isinstance(latent_result, tuple):
+            gpt_cond_latent, speaker_embedding = latent_result
+        elif isinstance(latent_result, dict):
+            gpt_cond_latent = latent_result["gpt_cond_latent"]
+            speaker_embedding = latent_result["speaker_embedding"]
+        else:
+            raise TypeError(f"Unexpected return type from get_conditioning_latents: {type(latent_result)}")
+        
         logger.info(
             f"Computed latents shapes: gpt_cond_latent={gpt_cond_latent.shape}, speaker_embedding={speaker_embedding.shape}")
 
@@ -182,7 +192,8 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
             if speaker_wav_wav.stem in cached_latents.get(lang, []):
                 continue # Already cached from .pt file
             try:
-                latents = get_latent_from_audio(model, lang, str(speaker_wav_wav))
+                gpt_cond_latent, speaker_embedding = get_latent_from_audio(model, lang, str(speaker_wav_wav))
+                latents = {"gpt_cond_latent": gpt_cond_latent, "speaker_embedding": speaker_embedding}
                 cache_manager.set(lang, speaker_wav_wav.stem, latents)
             except Exception as e:
                 logger.error(f"Failed to load latents from speaker{speaker_wav_wav}: {e}")
@@ -208,7 +219,7 @@ def get_wavout_dir():
 def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid: int = None) -> Path:
     """Save a tensor as a WAV file using torchaudio"""
 
-    formatted_now_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    formatted_now_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     filename = f"{formatted_now_time}_{get_cache_key(audio_path, uuid)}"
     path = Path(get_wavout_dir(), f"{filename}.wav")

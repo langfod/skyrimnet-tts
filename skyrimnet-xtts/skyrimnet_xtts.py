@@ -16,7 +16,7 @@ import gradio as gr
 import time
 import torch
 from loguru import logger
-from utils import get_latent_from_audio, init_latent_cache, save_torchaudio_wav
+from utils import get_latent_from_audio, init_latent_cache, save_torchaudio_wav, get_wavout_dir, get_latent_dir, get_speakers_dir, get_cache_key
 
 # Shared module imports
 from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG
@@ -278,7 +278,11 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
 
 def build_interface():
     """Build and return the Gradio interface with cache management."""
-    gr.set_static_paths(["output_temp"])
+    output_temp = get_wavout_dir().parent.absolute()
+    latents_dir = get_latent_dir().parent.absolute()
+    speakers_dir = get_speakers_dir().parent.absolute()
+
+    gr.set_static_paths([output_temp, latents_dir, speakers_dir])
     with gr.Blocks(analytics_enabled=False, title="XTTS") as demo:
         gr.Markdown("# XTTS with Speaker Embedding Cache")
 
@@ -350,7 +354,7 @@ def build_interface():
 # =============================================================================
 
 if __name__ == "__main__":
-    CURRENT_MODEL = load_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed)
+    CURRENT_MODEL = load_model(use_cpu=args.use_cpu)
 
     init_latent_cache(model=CURRENT_MODEL, supported_languages=SUPPORTED_LANGUAGE_CODES)
     wav, _ = generate_audio(text="This is a test.", speaker_audio="assets/malebrute.wav", language="en")

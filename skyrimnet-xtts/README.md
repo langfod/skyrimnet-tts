@@ -28,18 +28,12 @@ python -m skyrimnet-xtts [OPTIONS]
 - `--server HOST`: Server host address (default: localhost)
 - `--port PORT`: Server port number (default: 8020)
 - `--use_cpu`: Use CPU instead of CUDA for model inference
-- `--deepspeed`: Use DeepSpeed optimization for faster inference
 
 ### Examples
 
 **CPU Mode:**
 ```bash
 python -m skyrimnet-xtts --use_cpu --port 8021
-```
-
-**CUDA with DeepSpeed:**
-```bash
-python -m skyrimnet-xtts --deepspeed --port 8020
 ```
 
 **Custom Host/Port:**
@@ -81,6 +75,6 @@ After starting the module, you can access:
 
 - **Unified Application**: Both REST API and web interface in one process
 - **Model Sharing**: Single model instance shared between API and UI
-- **Flexible Deployment**: Can run on CPU or CUDA with optional DeepSpeed
+- **Flexible Deployment**: Can run on CPU or CUDA 
 - **Comprehensive Logging**: Structured logging with optional file output
 - **Caching System**: Intelligent latent caching for improved performance

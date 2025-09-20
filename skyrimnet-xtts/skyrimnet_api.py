@@ -383,7 +383,7 @@ if __name__ == "__main__":
     
     # Load model
     try:
-        CURRENT_MODEL = load_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed)
+        CURRENT_MODEL = load_model(use_cpu=args.use_cpu)
         
         # Setup model seed for reproducibility
         setup_model_seed(5272025)

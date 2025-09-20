@@ -17,13 +17,12 @@ from TTS.tts.models.xtts import Xtts
 # MODEL LOADING AND MANAGEMENT
 # =============================================================================
 
-def load_model(model_name="xtts_v2", use_deepspeed=False, use_cpu=False):
+def load_model(model_name="xtts_v2", use_cpu=False):
     """
     Load XTTS model with configuration
     
     Args:
         model_name: Name of the model to load (default: "xtts_v2")
-        use_deepspeed: Whether to use DeepSpeed optimization
         use_cpu: Whether to force CPU mode instead of CUDA
         
     Returns:
@@ -32,22 +31,7 @@ def load_model(model_name="xtts_v2", use_deepspeed=False, use_cpu=False):
     Raises:
         Exception: If model loading fails
     """
-    logger.info(f"Loading model: {model_name}, use_deepspeed: {use_deepspeed}, use_cpu: {use_cpu}")
-    
-    # Check if running in PyInstaller bundle
-    import sys
-    is_frozen = getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
-    
-    if is_frozen:
-        # Disable problematic features in PyInstaller bundle
-        use_deepspeed = False
-        logger.warning("DeepSpeed disabled in PyInstaller bundle to prevent compilation issues")
-        
-        # Set safe environment for PyInstaller
-        import os
-        os.environ["TORCH_EXTENSIONS_DIR"] = ""
-        os.environ["DS_BUILD_OPS"] = "0"
-        os.environ["COQUI_DISABLE_JIT"] = "1"
+    logger.info(f"Loading model: {model_name}, use_cpu: {use_cpu}")
     
     try:
         # Download/locate model files
@@ -61,13 +45,15 @@ def load_model(model_name="xtts_v2", use_deepspeed=False, use_cpu=False):
         model = Xtts.init_from_config(config)
         
         # Load checkpoint and set device
-        if use_cpu or is_frozen:
+        if use_cpu: #or is_frozen:
             # Force CPU mode in PyInstaller to avoid CUDA compilation issues
-            model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=False)
+            model.load_checkpoint(config, checkpoint_dir=output_model_path)
             model.cpu()
-            logger.info("Model loaded on CPU (PyInstaller safe mode)" if is_frozen else "Model loaded on CPU")
+            #logger.info("Model loaded on CPU (PyInstaller safe mode)" if is_frozen else "Model loaded on CPU")
+            logger.info("Model loaded on CPU")
+
         else:
-            model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed)
+            model.load_checkpoint(config, checkpoint_dir=output_model_path)
             model.cuda()
             logger.info("Model loaded on CUDA")
         
@@ -164,10 +150,6 @@ def check_text_length(text, model, language="en", char_limit=None):
         char_limit = getattr(model.tokenizer, 'char_limits', {}).get(language, 250)
     
     should_split = len(text) > char_limit
-    
-    if should_split:
-        logger.warning(f"Text length {len(text)} exceeds limit {char_limit} for language '{language}'. "
-                      f"Consider enabling text splitting.")
     
     return should_split, char_limit
 

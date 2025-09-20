@@ -31,7 +31,6 @@ dependencies = [
     "gradio",
     "loguru",
     "uvicorn",
-    "deepspeed",
 ]
 
 [project.optional-dependencies]
@@ -52,13 +51,12 @@ skyrimnet-tts = "skyrimnet_xtts:main"
 where = ["."]
 include = ["skyrimnet-xtts*"]
 
-# uv configuration for PyTorch CUDA and custom DeepSpeed wheel
+# uv configuration for PyTorch CUDA
 [tool.uv.sources]
 # Pin torch and torchaudio to the PyTorch CUDA index
 torch = { index = "pytorch-cu129" }
 torchaudio = { index = "pytorch-cu129" }
-# Use custom DeepSpeed wheel
-deepspeed = { url = "https://github.com/langfod/DeepSpeed/releases/download/v0.17.6w/deepspeed-0.17.6+1c39158a-cp312-cp312-win_amd64.whl" }
+
 
 [[tool.uv.index]]
 name = "pytorch-cu129"

@@ -120,6 +120,6 @@ try {
 if (Get-Command -ErrorAction SilentlyContinue Deactivate) { Deactivate }
 
 Write-Header "Done"
-Write-Host "If all succeeded you can run 2_Start.bat (Nvidia GPU) or 2_Start_DeepSpeed.bat (for GPU support with DeepSpeed) or 2_Start_CPU.bat (for CPU only)" -ForegroundColor Green
+Write-Host "If all succeeded you can run 2_Start.bat (Nvidia GPU) or 2_Start_CPU.bat (for CPU only)" -ForegroundColor Green
 
 exit 0

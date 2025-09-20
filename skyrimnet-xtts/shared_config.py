@@ -24,7 +24,6 @@ def setup_environment():
     # TTS Library configuration
     os.environ["COQUI_TOS_AGREED"] = "1"
     os.environ["TTS_HOME"] = "models"
-    os.environ["GRADIO_ALLOWED_PATHS"] = os.path.abspath("output_temp")
 
 # =============================================================================
 # COMMON CONSTANTS

@@ -23,7 +23,6 @@ To run:
 
 This should start in a high priority process window.
 
-`2_Start_DeepSpeed.bat` (for GPU support with DeepSpeed)
 or
 `2_Start_CPU.bat` (for CPU only)
 

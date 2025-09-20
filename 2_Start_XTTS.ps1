@@ -22,18 +22,13 @@ Start XTTS in standard mode
 .\2_Start_XTTS.ps1 -cpu
 Start XTTS in standard mode using CPU only (no GPU)
 
-.EXAMPLE
-.\2_Start_XTTS.ps1 -deepspeed
-Start XTTS in standard mode using Deepspeed (requires compatible GPU)
-
 Notes:
 - If the venv python isn't found this script will try the system python in PATH.
 - This script uses cmd.exe start /high to set process priority (works on Windows 10).
 #>
 
 param(
-    [switch]$cpu,
-    [switch]$deepspeed
+    [switch]$cpu
 )
 
 function Show-Banner {
@@ -118,14 +113,6 @@ $pythonArgs = ""
 if ($cpu) {
     $pythonArgs = "--cpu"
     Write-Host "CPU mode enabled" -ForegroundColor Cyan
-}
-if ($deepspeed) {
-    if ($cpu) {
-        Write-Host "Warning: --deepspeed is ignored when --cpu is also specified." -ForegroundColor Yellow
-    } else {
-        $pythonArgs = "--deepspeed"
-        Write-Host "Deepspeed mode enabled" -ForegroundColor Cyan
-    }
 }
 
 # Start a new PowerShell window, set the console title, and run the python module inside it.
