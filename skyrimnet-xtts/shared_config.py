@@ -8,6 +8,8 @@ import os
 import sys
 
 
+
+
 # =============================================================================
 # ENVIRONMENT SETUP
 # =============================================================================
@@ -25,15 +27,19 @@ def setup_environment():
     os.environ["COQUI_TOS_AGREED"] = "1"
     os.environ["TTS_HOME"] = "models"
 
+    import warnings
+    warnings.filterwarnings("ignore", module='Setuptools.*', append=True)
+    warnings.filterwarnings("ignore", module='numbpysbd.*', append=True)
+    warnings.filterwarnings("ignore", module='jieba.*', append=True)
+    warnings.filterwarnings("ignore", module='jamo.*', append=True)
+    warnings.filterwarnings("ignore", module='g2pkk.*', append=True)
+
 # =============================================================================
 # COMMON CONSTANTS
 # =============================================================================
 
 # Supported language codes for TTS
-SUPPORTED_LANGUAGE_CODES = [
-    "en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", 
-    "nl", "cs", "ar", "zh", "ja", "hu", "ko"
-]
+SUPPORTED_LANGUAGE_CODES = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "hu", "ko", "ja", "hi"]
 
 # Cache configuration defaults
 DEFAULT_CACHE_CONFIG = {
@@ -46,7 +52,8 @@ DEFAULT_TTS_PARAMS = {
     "TEMPERATURE": 0.7,
     "TOP_P": 1.0,
     "TOP_K": 50,
-    "SPEED": 1.0
+    "SPEED": 1.0,
+    "REPETITION_PENALTY": 2.0
 }
 
 # Text splitting threshold per language (characters)
@@ -70,7 +77,13 @@ def validate_language(language: str) -> str:
     Raises:
         ValueError: If language is not supported
     """
-    normalized = language.split("-")[0] if language else "en"
+    language = language.lower()
+    if language is None:
+        normalized = "en"
+    elif language in ["zh-cn", "zh", "cn"]:
+        normalized = "zh-cn"
+    else:
+        normalized = language.split("-")[0] if language else "en"
     
     if normalized not in SUPPORTED_LANGUAGE_CODES:
         raise ValueError(f"Language '{language}' not supported. "

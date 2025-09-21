@@ -1,0 +1,51 @@
+
+# SkyrimNet XTTS (Zonos emulated) Voice Configuration
+# 
+# For each setting, choose:
+#   "default" = Use recommended XTTS values (safest choice)
+#   "api"     = Use values from SkyrimNet UI (advanced users)
+#   number    = Set your own custom value (experts only)
+#
+# If unsure, leave everything as "default"
+
+# TEMPERATURE: How creative/varied the voice sounds (0.0 to 2.0)
+# Lower = more predictable, Higher = more expressive
+# IMPORTANT: This uses the "linear" slider in SkyrimNet UI when set to "api"
+temperature = default
+
+# TOP_K: Voice quality vs creativity (1 to 100) 
+# Lower = better quality but more boring
+# IMPORTANT: This uses the "min_k" slider in SkyrimNet UI when set to "api"
+top_k = default
+
+# TOP_P: How selective word choices are (0.0 to 1.0)
+# Lower = more predictable speech
+top_p = default
+
+# REPETITION_PENALTY: Prevents repeated words and "ums" (1.0 to 3.0)
+# Higher = less repetition but may sound unnatural
+# IMPORTANT: This uses the "confidence" slider in SkyrimNet UI when set to "api"
+repetition_penalty = default
+
+# SPEED: How fast the speech is (0.5 to 2.0)
+# 1.0 = normal speed, higher may cause artifacts
+speed = default
+
+
+# Examples of custom values (advanced users):
+# temperature = 0.9
+# top_p = 0.8
+# top_k: int = 50
+# repetition_penalty = 1.5
+
+
+#####################################################################
+# Caching Settings - Leave these alone unless you have problems
+
+# MEMORY CACHE: Faster repeated voice generation
+# true = faster (recommended), false = slower but uses less RAM
+enable_memory_cache = true
+
+# DISK CACHE: Save voices between sessions  
+# true = faster startup (recommended), false = slower but uses less disk space
+enable_disk_cache = true

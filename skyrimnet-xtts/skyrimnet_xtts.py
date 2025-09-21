@@ -19,7 +19,7 @@ from loguru import logger
 from utils import get_latent_from_audio, init_latent_cache, save_torchaudio_wav, get_wavout_dir, get_latent_dir, get_speakers_dir, get_cache_key
 
 # Shared module imports
-from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG
+from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_TTS_PARAMS, DEFAULT_CACHE_CONFIG, validate_language
 from shared_models import load_model, check_text_length
 from shared_args import parse_gradio_args
 
@@ -62,14 +62,13 @@ def load_skyrimnet_config():
     if _CONFIG_CACHE is not None:
         return _CONFIG_CACHE
     
-    # Default configuration
+    # Default configuration - using shared defaults from shared_config
     default_config = {
-        'temperature': 0.8,
-        'min_p': 0.07, 
-        'top_p': 1.0,
-        'repetition_penalty': 2.0,
-        'cfg_weight': 0.0,  # Speed optimized default
-        'exaggeration': 0.7
+        'temperature': DEFAULT_TTS_PARAMS["TEMPERATURE"],
+        'top_p': DEFAULT_TTS_PARAMS["TOP_P"],
+        'top_k': DEFAULT_TTS_PARAMS["TOP_K"],
+        'speed': DEFAULT_TTS_PARAMS["SPEED"],
+        'repetition_penalty': DEFAULT_TTS_PARAMS["REPETITION_PENALTY"],
     }
     
     global_flags = {
@@ -79,11 +78,10 @@ def load_skyrimnet_config():
     
     config_mode = {
         'temperature': 'default',
-        'min_p': 'default',
-        'top_p': 'default', 
-        'repetition_penalty': 'default',
-        'cfg_weight': 'default',
-        'exaggeration': 'default'
+        'top_p': 'default',
+        'top_k': 'default',
+        'speed': 'default',
+        'repetition_penalty': 'default'
     }
     
     try:
@@ -156,14 +154,13 @@ def load_skyrimnet_config():
 def get_config_value(param_name, api_value, defaults, modes, bypass_config=False):
     """Get the appropriate value based on configuration mode"""
     if bypass_config:
-        # API mode: use API value with fallback to reasonable defaults
+        # API mode: use API value with fallback to shared defaults
         fallback_defaults = {
-            'temperature': 0.9,
-            'min_p': 0.05,
-            'top_p': 1.0,
-            'repetition_penalty': 2.0,
-            'cfg_weight': 0.0,
-            'exaggeration': 0.55
+            'temperature': DEFAULT_TTS_PARAMS["TEMPERATURE"],
+            'top_p': DEFAULT_TTS_PARAMS["TOP_P"],
+            'top_k': DEFAULT_TTS_PARAMS["TOP_K"],
+            'speed': DEFAULT_TTS_PARAMS["SPEED"],
+            'repetition_penalty': DEFAULT_TTS_PARAMS["REPETITION_PENALTY"],
         }
         return api_value if api_value is not None else fallback_defaults.get(param_name, 0.0)
     
@@ -211,7 +208,7 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     """
     Generates audio based on the provided UI parameters with enhanced caching.
     """
-    language = language.split("-")[0] if language else "en"
+    language = validate_language(language)
     logger.info(f"inputs: text={text}, language={language}, speaker_audio={Path(speaker_audio).stem if speaker_audio else 'None'}, seed={seed}")
     # Start timing the entire function
     func_start_time = time.perf_counter()
@@ -249,16 +246,27 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     if enable_text_splitting:
         logger.warning(f"Text length {len(text)} exceeds limit {char_limit} for language '{language}'. Enabling text splitting.")
     
+    if speaker_audio is None or speaker_audio.strip() == "":
+        speaker_audio = "malebrute.wav"
+
     gpt_cond_latent, speaker_embedding = get_latent_from_audio(CURRENT_MODEL, language, speaker_audio, speaker_audio_uuid)
+    
+    # Get effective parameter values using config system
+    effective_temperature = get_config_value('temperature', None, defaults, modes, _USE_API_MODE)
+    effective_top_p = get_config_value('top_p', top_p, defaults, modes, _USE_API_MODE)
+    effective_top_k = get_config_value('top_k', top_k, defaults, modes, _USE_API_MODE)
+    effective_speed = get_config_value('speed', speaking_rate, defaults, modes, _USE_API_MODE)
+    effective_repetition_penalty = get_config_value('repetition_penalty', confidence, defaults, modes, _USE_API_MODE)
     
     wav_out = CURRENT_MODEL.inference(
     text=text, language=language,
     gpt_cond_latent=gpt_cond_latent,
     speaker_embedding=speaker_embedding,
-    speed=1.0,  # speaking_rate if speaking_rate else 1.0,
-    top_p=1.0,  # top_p if top_p else 1.0,
-    top_k=50,   # top_k if top_k else 50,
-    temperature=0.7,
+    speed=effective_speed,
+    top_p=effective_top_p,
+    top_k=effective_top_k,
+    temperature=effective_temperature,
+    repetition_penalty=effective_repetition_penalty,
     enable_text_splitting=enable_text_splitting,
     )
     wav_out_path = save_torchaudio_wav(wav_tensor=torch.tensor(wav_out["wav"]).unsqueeze(0), sr=24000, audio_path=speaker_audio, uuid=speaker_audio_uuid)

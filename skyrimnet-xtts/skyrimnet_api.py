@@ -43,6 +43,7 @@ DEFAULT_TEMPERATURE = DEFAULT_TTS_PARAMS["TEMPERATURE"]
 DEFAULT_TOP_P = DEFAULT_TTS_PARAMS["TOP_P"]
 DEFAULT_TOP_K = DEFAULT_TTS_PARAMS["TOP_K"]
 DEFAULT_SPEED = DEFAULT_TTS_PARAMS["SPEED"]
+DEFAULT_REPETITION_PENALTY = DEFAULT_TTS_PARAMS["REPETITION_PENALTY"]
 
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
@@ -244,6 +245,7 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
             top_p=DEFAULT_TOP_P,
             top_k=DEFAULT_TOP_K,
             temperature=DEFAULT_TEMPERATURE,
+            repetition_penalty=DEFAULT_REPETITION_PENALTY,
             enable_text_splitting=enable_text_splitting,
         )
         

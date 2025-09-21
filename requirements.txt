@@ -3,9 +3,11 @@ torch<2.9
 torchaudio
 
 
+Setuptools>80,<81
+cupy-cuda12x
 numpy
 psutil
-
+spacy[ja]
 pydantic
 loguru
 uvicorn

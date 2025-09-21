@@ -116,6 +116,9 @@ def _save_pt_to_disk(filename, data):
 
 def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audio_uuid: int = None, latents_only: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
     """Get or compute and cache latents for a given speaker audio file."""
+    if speaker_audio is None:
+        return None, None
+    
     cache_file_key = get_cache_key(speaker_audio, speaker_audio_uuid)
 
     # Check in-memory cache first

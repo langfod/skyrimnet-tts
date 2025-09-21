@@ -9,6 +9,8 @@ on:
 jobs:
   validate_and_publish:
     runs-on: windows-latest
+    env:
+      PACKAGE_NAME: "SkyrimNet_XTTS"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,7 +55,7 @@ jobs:
           if (Test-Path "archive") {
             Remove-Item -Path "archive" -Recurse -Force
           }
-          New-Item -ItemType Directory -Path "archive/skyrimnet-xtts" -Force
+          New-Item -ItemType Directory -Path "archive/$env:PACKAGE_NAME" -Force
         shell: pwsh
       
       - name: Compile SkyrimNet XTTS
@@ -64,21 +66,21 @@ jobs:
       - name: Copy files to archive
         run: |
           # Copy assets
-          Copy-Item -Path "speakers" -Destination "archive\skyrimnet-xtts\" -Force -Recurse
-          Copy-Item -Path "assets" -Destination "archive\skyrimnet-xtts\" -Force -Recurse
-          Copy-Item -Path "skyrimnet-xtts\skyrimnet_config.txt" -Destination "archive\skyrimnet-xtts\" -Force -Recurse  
+          Copy-Item -Path "speakers" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
+          Copy-Item -Path "assets" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
+          Copy-Item -Path "skyrimnet_config.txt" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse  
         shell: pwsh
 
       # Archive dist directory with version tag
       - name: Archive dist directory
         run: |
-          $archiveName = "SkyrimNet_XTTS"
+          $archiveName = "$env:PACKAGE_NAME"
           if ($env:VERSION_TAG) {
-            $archiveName = "SkyrimNet_XTTS_$env:VERSION_TAG"
+            $archiveName = "$env:PACKAGE_NAME`_$env:VERSION_TAG"
           }
           Write-Host "Creating archive: $archiveName.zip"
           Set-Location -Path ./archive
-          tar --format zip -cf "$archiveName.zip" "SkyrimNet_XTTS"
+          tar --format zip -cf "$archiveName.zip" "$env:PACKAGE_NAME"
           Set-Location -Path ..
         shell: pwsh
 
@@ -87,9 +89,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          $archiveName = "SkyrimNet_XTTS"
+          $archiveName = "$env:PACKAGE_NAME"
           if ($env:VERSION_TAG) {
-            $archiveName = "SkyrimNet_XTTS_$env:VERSION_TAG"
+            $archiveName = "$env:PACKAGE_NAME`_$env:VERSION_TAG"
           }
           gh release upload ${{github.event.release.tag_name}} "./archive/$archiveName.zip"
         shell: pwsh
