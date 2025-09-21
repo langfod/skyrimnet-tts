@@ -19,7 +19,7 @@ function Print-Banner {
  Y8a     a8P  88`"Yba,    `8b,d8'    88          88  88      88      88  88     `8888  "8b,   ,aa    88,    
   "Y88888P"   88   `Y8a     Y88'     88          88  88      88      88  88      `888   `"Ybbd8"'    "Y888  
                             d8'                                                  
-                           d8'      XTTS (Zonos Emulated)                                          
+                           d8'      XTTS (XTTS / Gradio / Zonos Emulated)                                          
 
 '@
     Write-Host $banner
@@ -83,11 +83,6 @@ try {
     $pyArgs = ''
 }
 
-# Create venv in .venv
-if (Test-Path -Path '.venv') {
-    Write-Host "Removing existing .venv to recreate..."
-    Remove-Item -Recurse -Force -Path '.venv'
-}
 
 $createVenvArgs = @()
 if ($pyArgs -ne '') { $createVenvArgs += $pyArgs }
@@ -112,8 +107,8 @@ if (-not (Test-Path $activateScript)) {
 try {
     Write-Host "Upgrading pip and installing packages from requirements.txt (be patient)"
     python -m pip install --quiet --upgrade pip
-	pip install uv
-    uv pip install -r requirements.txt
+    pip install uv
+    uv pip install --link-mode=copy -e .
 } catch {
     Write-Error "Package installation failed: $_"
     # Deactivate if possible and exit non-zero
@@ -125,6 +120,6 @@ try {
 if (Get-Command -ErrorAction SilentlyContinue Deactivate) { Deactivate }
 
 Write-Header "Done"
-Write-Host "If all succeeded you can run 2_Start.bat or 2_Start_DeepSpeed.bat (for GPU support with DeepSpeed) or 2_Start_CPU.bat (for CPU only)" -ForegroundColor Green
+Write-Host "If all succeeded you can run 2_Start.bat (Nvidia GPU) or 2_Start_CPU.bat (for CPU only)" -ForegroundColor Green
 
 exit 0

@@ -1,0 +1,99 @@
+name: Create SkyrimNet XTTS Package
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+
+jobs:
+  validate_and_publish:
+    runs-on: windows-latest
+    env:
+      PACKAGE_NAME: "SkyrimNet_XTTS"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Download and Extract UPX
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v5.0.2/upx-5.0.2-win64.zip" -OutFile upx.zip
+          Expand-Archive -Path upx.zip -DestinationPath upx-extracted
+        shell: pwsh
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv pip install -r requirements.txt
+          pip install pyinstaller
+        shell: pwsh
+
+      # Extract version from the tag
+      - name: Extract version from tag
+        id: version_extraction
+        run: |
+          if ($env:GITHUB_REF -match '\d+\.\d+\.\d+.*') {
+            $versionTag = $matches[0]
+            Add-Content -Path $env:GITHUB_ENV -Value "VERSION_TAG=$versionTag"
+          } else {
+            Write-Error "No valid version found in GITHUB_REF: $env:GITHUB_REF"
+          }
+        shell: pwsh    
+
+      - name: Show TAG Version
+        run: | 
+          Write-Host "VERSION_TAG=$env:VERSION_TAG"
+        shell: pwsh
+
+      - name: Create archive directories
+        run: |
+          if (Test-Path "archive") {
+            Remove-Item -Path "archive" -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path "archive/$env:PACKAGE_NAME" -Force
+        shell: pwsh
+      
+      - name: Compile SkyrimNet XTTS
+        run: |
+          pyinstaller skyrimnet-xtts.spec --clean --noconfirm --log-level WARN --upx-dir upx-extracted/upx-5.0.2-win64
+        shell: pwsh
+
+      - name: Copy files to archive
+        run: |
+          # Copy assets
+          Copy-Item -Path "speakers" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
+          Copy-Item -Path "assets" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
+          Copy-Item -Path "skyrimnet_config.txt" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse  
+          Copy-Item -Path "examples\2_Start_XTTS.bat" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
+        shell: pwsh
+
+      # Archive dist directory with version tag
+      - name: Archive dist directory
+        run: |
+          $archiveName = "$env:PACKAGE_NAME"
+          if ($env:VERSION_TAG) {
+            $archiveName = "$env:PACKAGE_NAME`_$env:VERSION_TAG"
+          }
+          Write-Host "Creating archive: $archiveName.zip"
+          Set-Location -Path ./archive
+          tar --format zip -cf "$archiveName.zip" "$env:PACKAGE_NAME"
+          Set-Location -Path ..
+        shell: pwsh
+
+      # Upload artifact with version tag
+      - name: Upload artifact
+        if: ${{ github.event_name == 'release' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $archiveName = "$env:PACKAGE_NAME"
+          if ($env:VERSION_TAG) {
+            $archiveName = "$env:PACKAGE_NAME" + "_" + "$env:VERSION_TAG"
+          }
+          gh release upload ${{github.event.release.tag_name}} "./archive/$archiveName.zip"
+        shell: pwsh

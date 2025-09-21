@@ -1,68 +1,51 @@
 
-# SkyrimNet Chatterbox Configuration
-# This file controls how voice generation settings work with SkyrimNet UI
+# SkyrimNet XTTS (Zonos emulated) Voice Configuration
 # 
-# For each setting below, you can choose:
-# "default" = Use the built-in Chatterbox value (recommended for most users)
-# "api" = Use the value sent from SkyrimNet UI (gives you full control)
+# For each setting, choose:
+#   "default" = Use recommended XTTS values (safest choice)
+#   "api"     = Use values from SkyrimNet UI (advanced users)
+#   number    = Set your own custom value (experts only)
 #
-# If you're not sure, leave everything as "default"
+# If unsure, leave everything as "default"
 
-# TEMPERATURE: Controls how creative/random the voice sounds
-# Lower = more predictable, Higher = more varied/expressive
-# Range: 0.00 to 2.00, Recommended: 0.8
-# Note: This uses the "linear" slider in SkyrimNet UI when set to "api"
+# TEMPERATURE: How creative/varied the voice sounds (0.0 to 2.0)
+# Lower = more predictable, Higher = more expressive
+# IMPORTANT: This uses the "linear" slider in SkyrimNet UI when set to "api"
 temperature = default
 
-# MIN_P: Modern way to control speech quality (newer method)  
-# Lower = safer/stable speech, Higher = more creative but risky
-# Range: 0.00 to 1.00, Recommended: 0.05, Set to 0.00 to disable
-min_p = default
+# TOP_K: Voice quality vs creativity (1 to 100) 
+# Lower = better quality but more boring
+# IMPORTANT: This uses the "min_k" slider in SkyrimNet UI when set to "api"
+top_k = default
 
-# TOP_P: Classic way to control speech variety (older method)
-# Lower = more focused, Higher = more varied, 1.00 = disabled (recommended)
-# Range: 0.00 to 1.00, Recommended: 1.00 (disabled)
+# TOP_P: How selective word choices are (0.0 to 1.0)
+# Lower = more predictable speech
 top_p = default
 
-# REPETITION_PENALTY: Stops the voice from repeating words too much
-# 1.00 = no penalty, Higher = less repetition
-# Range: 1.00 to 2.00, Recommended: 1.2
-# Note: This uses the "confidence" slider in SkyrimNet UI when set to "api"
+# REPETITION_PENALTY: Prevents repeated words and "ums" (1.0 to 3.0)
+# Higher = less repetition but may sound unnatural
+# IMPORTANT: This uses the "confidence" slider in SkyrimNet UI when set to "api"
 repetition_penalty = default
 
-# CFG_WEIGHT: Controls speech pacing and guidance strength
-# Lower = slower/deliberate pacing, Higher = faster/guided speech
-# Range: 0.00 to 1.00, Recommended: 0.5, Speed optimized: 0.0
-# Note: This uses the "cfg_scale" slider in SkyrimNet UI when set to "api"
-cfg_weight = default
-
-# EXAGGERATION: Controls emotion intensity and expression
-# Lower = neutral/calm, Higher = dramatic/expressive
-# Range: 0.00 to 2.00, Recommended: 0.5, Dramatic: 0.7+
-# Note: This uses the "quadratic" slider in SkyrimNet UI when set to "api"
-exaggeration = default
+# SPEED: How fast the speech is (0.5 to 2.0)
+# 1.0 = normal speed, higher may cause artifacts
+speed = default
 
 
-# Advanced users: You can also set specific values instead of "default" or "api"
-# Examples:
+# Examples of custom values (advanced users):
 # temperature = 0.9
-# min_p = 0.03
 # top_p = 0.8
-# repetition_penalty = 1.3
-# cfg_weight = 0.3
-# exaggeration = 0.55
+# top_k: int = 50
+# repetition_penalty = 1.5
 
 
 #####################################################################
-# Conditionals (latents) are cached to memory and disk by default.
-# You probably do not want to change these.
+# Caching Settings - Leave these alone unless you have problems
 
-# ENABLE_MEMORY_CACHE: Controls whether to use in-memory caching for faster repeated generation
-# true = Use memory cache (faster for repeated audio), false = No memory cache
-# Recommended: true (faster performance)
+# MEMORY CACHE: Faster repeated voice generation
+# true = faster (recommended), false = slower but uses less RAM
 enable_memory_cache = true
 
-# ENABLE_DISK_CACHE: Controls whether to save generated audio to disk cache
-# true = Save to disk cache (reuse across sessions), false = No disk cache  
-# Recommended: true (saves time on repeated requests)
+# DISK CACHE: Save voices between sessions  
+# true = faster startup (recommended), false = slower but uses less disk space
 enable_disk_cache = true

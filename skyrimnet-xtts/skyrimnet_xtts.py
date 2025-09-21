@@ -6,48 +6,39 @@ Enhanced with disk and memory caching for speaker embeddings
 
 # Standard library imports
 import functools
-import os
 from pathlib import Path
 import sys
 import time
-import argparse
-from loguru import logger
+
 
 # Third-party imports
 import gradio as gr
-import os
 import time
-
-from TTS.utils.manage import ModelManager
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import Xtts
 import torch
-from utils import get_latent_from_audio, init_latent_cache, save_torchaudio_wav
+from loguru import logger
+from utils import get_latent_from_audio, init_latent_cache, save_torchaudio_wav, get_wavout_dir, get_latent_dir, get_speakers_dir, get_cache_key
+
+# Shared module imports
+from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_TTS_PARAMS, DEFAULT_CACHE_CONFIG, validate_language
+from shared_models import load_model, check_text_length
+from shared_args import parse_gradio_args
 
 # =============================================================================
 # GLOBAL CONFIGURATION AND CONSTANTS
 # =============================================================================
-# Fix torch.compile C++ compilation issues on Windows
-if sys.platform == "win32":
-    os.environ["TORCH_COMPILE_CPP_FORCE_X64"] = "1"
-    # Alternative approach - force specific compiler architecture
-    os.environ["DISTUTILS_USE_SDK"] = "1"
-    os.environ["MSSdk"] = "1"
 
-os.environ["COQUI_TOS_AGREED"] = "1"
-os.environ["TTS_HOME"] = "models"
+# Initialize environment
+setup_environment()
 
 # Global model state
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
 SPEAKER_EMBEDDING = None
 SPEAKER_AUDIO_PATH = None
-SPEAKER_AUDIO_PATH_DICT = {}
-SUPPORTED_LANGUAGE_CODES = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja", "hu", "ko"]
 
 # Cache flags - defaults that can be overridden by skyrimnet_config.txt
-ENABLE_DISK_CACHE = True
-ENABLE_MEMORY_CACHE = True
+ENABLE_DISK_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_DISK_CACHE"]
+ENABLE_MEMORY_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_MEMORY_CACHE"]
 _CONFIG_CACHE = None
 _CONFIG_FILE_PATH = "skyrimnet_config.txt"
 # Testing flag - when True, bypasses config loading and uses all API values
@@ -57,15 +48,7 @@ _USE_API_MODE = False
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--share', action='store_true')
-parser.add_argument("--server", type=str, default='0.0.0.0')
-parser.add_argument("--port", type=int, required=False)
-parser.add_argument("--inbrowser", action='store_true')
-parser.add_argument("--use_cpu", action='store_true')
-parser.add_argument("--deepspeed", action='store_true')
-
-args = parser.parse_args()
+args = parse_gradio_args("Zonos Text-to-Speech Application with Gradio Interface")
 
 # =============================================================================
 # Support Functions
@@ -78,14 +61,13 @@ def load_skyrimnet_config():
     if _CONFIG_CACHE is not None:
         return _CONFIG_CACHE
     
-    # Default configuration
+    # Default configuration - using shared defaults from shared_config
     default_config = {
-        'temperature': 0.8,
-        'min_p': 0.07, 
-        'top_p': 1.0,
-        'repetition_penalty': 2.0,
-        'cfg_weight': 0.0,  # Speed optimized default
-        'exaggeration': 0.7
+        'temperature': DEFAULT_TTS_PARAMS["TEMPERATURE"],
+        'top_p': DEFAULT_TTS_PARAMS["TOP_P"],
+        'top_k': DEFAULT_TTS_PARAMS["TOP_K"],
+        'speed': DEFAULT_TTS_PARAMS["SPEED"],
+        'repetition_penalty': DEFAULT_TTS_PARAMS["REPETITION_PENALTY"],
     }
     
     global_flags = {
@@ -95,11 +77,10 @@ def load_skyrimnet_config():
     
     config_mode = {
         'temperature': 'default',
-        'min_p': 'default',
-        'top_p': 'default', 
-        'repetition_penalty': 'default',
-        'cfg_weight': 'default',
-        'exaggeration': 'default'
+        'top_p': 'default',
+        'top_k': 'default',
+        'speed': 'default',
+        'repetition_penalty': 'default'
     }
     
     try:
@@ -172,14 +153,13 @@ def load_skyrimnet_config():
 def get_config_value(param_name, api_value, defaults, modes, bypass_config=False):
     """Get the appropriate value based on configuration mode"""
     if bypass_config:
-        # API mode: use API value with fallback to reasonable defaults
+        # API mode: use API value with fallback to shared defaults
         fallback_defaults = {
-            'temperature': 0.9,
-            'min_p': 0.05,
-            'top_p': 1.0,
-            'repetition_penalty': 2.0,
-            'cfg_weight': 0.0,
-            'exaggeration': 0.55
+            'temperature': DEFAULT_TTS_PARAMS["TEMPERATURE"],
+            'top_p': DEFAULT_TTS_PARAMS["TOP_P"],
+            'top_k': DEFAULT_TTS_PARAMS["TOP_K"],
+            'speed': DEFAULT_TTS_PARAMS["SPEED"],
+            'repetition_penalty': DEFAULT_TTS_PARAMS["REPETITION_PENALTY"],
         }
         return api_value if api_value is not None else fallback_defaults.get(param_name, 0.0)
     
@@ -227,7 +207,7 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     """
     Generates audio based on the provided UI parameters with enhanced caching.
     """
-    language = language.split("-")[0] if language else "en"
+    language = validate_language(language)
     logger.info(f"inputs: text={text}, language={language}, speaker_audio={Path(speaker_audio).stem if speaker_audio else 'None'}, seed={seed}")
     # Start timing the entire function
     func_start_time = time.perf_counter()
@@ -254,28 +234,38 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     #seed = int(seed)
 
     # Handle speaker audio caching
-    global SPEAKER_AUDIO_PATH, SPEAKER_AUDIO_PATH_DICT, SPEAKER_EMBEDDING
+    global SPEAKER_AUDIO_PATH, SPEAKER_EMBEDDING
 
     speaker_audio_uuid = seed
 
-    seed =   torch.randint(0, 2**32 - 1, (1,)).item() if seed is None or randomize_seed else cpp_uuid_to_seed(seed)
+    seed = torch.randint(0, 2**32 - 1, (1,)).item() if seed is None or randomize_seed else cpp_uuid_to_seed(seed)
     torch.manual_seed(seed)
     
-    enable_text_splitting = False
-    if len(text) > CURRENT_MODEL.tokenizer.char_limits.get(language, 250):
-        logger.warning(f"Text length {len(text)} exceeds model limit for language '{language}'. Enabling text splitting.")
-        enable_text_splitting = True
+    enable_text_splitting, char_limit = check_text_length(text, CURRENT_MODEL, language)
+    if enable_text_splitting:
+        logger.warning(f"Text length {len(text)} exceeds limit {char_limit} for language '{language}'. Enabling text splitting.")
     
+    if speaker_audio is None or speaker_audio.strip() == "":
+        speaker_audio = "malebrute.wav"
+
     gpt_cond_latent, speaker_embedding = get_latent_from_audio(CURRENT_MODEL, language, speaker_audio, speaker_audio_uuid)
+    
+    # Get effective parameter values using config system
+    effective_temperature = get_config_value('temperature', None, defaults, modes, _USE_API_MODE)
+    effective_top_p = get_config_value('top_p', top_p, defaults, modes, _USE_API_MODE)
+    effective_top_k = get_config_value('top_k', top_k, defaults, modes, _USE_API_MODE)
+    effective_speed = get_config_value('speed', speaking_rate, defaults, modes, _USE_API_MODE)
+    effective_repetition_penalty = get_config_value('repetition_penalty', confidence, defaults, modes, _USE_API_MODE)
     
     wav_out = CURRENT_MODEL.inference(
     text=text, language=language,
     gpt_cond_latent=gpt_cond_latent,
     speaker_embedding=speaker_embedding,
-    speed=1.0,  # speaking_rate if speaking_rate else 1.0,
-    top_p=1.0,  # top_p if top_p else 1.0,
-    top_k=50,   # top_k if top_k else 50,
-    temperature=0.7,
+    speed=effective_speed,
+    top_p=effective_top_p,
+    top_k=effective_top_k,
+    temperature=effective_temperature,
+    repetition_penalty=effective_repetition_penalty,
     enable_text_splitting=enable_text_splitting,
     )
     wav_out_path = save_torchaudio_wav(wav_tensor=torch.tensor(wav_out["wav"]).unsqueeze(0), sr=24000, audio_path=speaker_audio, uuid=speaker_audio_uuid)
@@ -295,6 +285,11 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
 
 def build_interface():
     """Build and return the Gradio interface with cache management."""
+    output_temp = get_wavout_dir().parent.absolute()
+    latents_dir = get_latent_dir().parent.absolute()
+    speakers_dir = get_speakers_dir().parent.absolute()
+
+    gr.set_static_paths([output_temp, latents_dir, speakers_dir])
     with gr.Blocks(analytics_enabled=False, title="XTTS") as demo:
         gr.Markdown("# XTTS with Speaker Embedding Cache")
 
@@ -365,21 +360,8 @@ def build_interface():
 # MAIN EXECUTION
 # =============================================================================
 
-def load_model(model_name="xtts_v2", use_deepspeed=False, use_cpu=False):
-    output_model_path, output_config_path, model_item = ModelManager().download_model(model_name)
-    config = XttsConfig()
-    config.load_json(output_config_path)
-    model = Xtts.init_from_config(config)
-    if use_cpu:
-        model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=False)
-        model.cpu()
-    else:
-        model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed)
-        model.cuda()
-    return model
-
 if __name__ == "__main__":
-    CURRENT_MODEL = load_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed)
+    CURRENT_MODEL = load_model(use_cpu=args.use_cpu)
 
     init_latent_cache(model=CURRENT_MODEL, supported_languages=SUPPORTED_LANGUAGE_CODES)
     wav, _ = generate_audio(text="This is a test.", speaker_audio="assets/malebrute.wav", language="en")
