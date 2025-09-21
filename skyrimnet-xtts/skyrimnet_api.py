@@ -6,15 +6,13 @@ Simplified FastAPI service modeling APIs from xtts_api_server but using methodol
 """
 
 # Standard library imports
-import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 # Third-party imports
 import uvicorn
-import torch
 import time
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,29 +20,31 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from loguru import logger
 
-# Local imports
-from utils import get_latent_from_audio, get_speakers_dir, init_latent_cache, save_torchaudio_wav
-from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_TTS_PARAMS, validate_language
-from shared_models import load_model, setup_model_seed, validate_model_state, check_text_length
-from shared_args import parse_api_args
-
+# Local imports - Handle both direct execution and module execution
+try:
+    # Try relative imports first (for module execution: python -m skyrimnet-xtts)
+    from .shared_cache_utils import get_latent_from_audio
+    from .shared_config import SUPPORTED_LANGUAGE_CODES, validate_language
+    from .shared_args import parse_api_args
+    from .shared_audio_utils import generate_audio_file
+    from .shared_app_utils import setup_application_logging, initialize_application_environment
+    from .shared_models import initialize_model_with_cache, setup_model_seed
+except ImportError:
+    # Fall back to absolute imports (for direct execution: python skyrimnet_api.py)
+    from shared_cache_utils import get_latent_from_audio
+    from shared_config import SUPPORTED_LANGUAGE_CODES, validate_language
+    from shared_args import parse_api_args
+    from shared_audio_utils import generate_audio_file
+    from shared_app_utils import setup_application_logging, initialize_application_environment
+    from shared_models import initialize_model_with_cache, setup_model_seed
 # =============================================================================
 # GLOBAL CONFIGURATION AND CONSTANTS
 # =============================================================================
 
-# Initialize environment
-setup_environment()
-
 # Global model state
 CURRENT_MODEL = None
-
-# Hardcoded constants for Phase 1 (using shared defaults)
-DEFAULT_TEMPERATURE = DEFAULT_TTS_PARAMS["TEMPERATURE"]
-DEFAULT_TOP_P = DEFAULT_TTS_PARAMS["TOP_P"]
-DEFAULT_TOP_K = DEFAULT_TTS_PARAMS["TOP_K"]
-DEFAULT_SPEED = DEFAULT_TTS_PARAMS["SPEED"]
-DEFAULT_REPETITION_PENALTY = DEFAULT_TTS_PARAMS["REPETITION_PENALTY"]
-
+IGNORE_PING = False
+CACHED_TEMP_DIR = None
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
@@ -55,29 +55,20 @@ args = parse_api_args("SkyrimNet Simplified TTS API")
 # LOGGING SETUP
 # =============================================================================
 
-# Remove default logger to avoid conflicts
-logger.remove()
-logger.add(sys.stdout, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", level="INFO", enqueue=True)
+# Global flag to track if logging has been initialized
+_LOGGING_INITIALIZED = False
 
-# Optional file logging
-LOG_TO_FILE = os.getenv('LOG_TO_FILE') == 'true'
-LOG_FILE_PATH = os.getenv('LOG_FILE_PATH', 'logs/skyrimnet_api.log')
+def initialize_api_logging():
+    """Initialize logging for the API module"""
+    global _LOGGING_INITIALIZED
+    if not _LOGGING_INITIALIZED:
+        # Setup standardized logging (only when not already configured)
+        setup_application_logging()
+        _LOGGING_INITIALIZED = True
 
-if LOG_TO_FILE:
-    log_dir = os.path.dirname(LOG_FILE_PATH)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    
-    logger.add(
-        LOG_FILE_PATH,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}",
-        level="INFO",
-        rotation="10 MB",
-        retention="7 days",
-        compression="zip",
-        enqueue=True
-    )
-    logger.info(f"File logging enabled. Logs will be written to: {LOG_FILE_PATH}")
+# Only setup logging when running as standalone script
+if __name__ == "__main__":
+    initialize_api_logging()
 
 # =============================================================================
 # PYDANTIC REQUEST/RESPONSE MODELS
@@ -91,40 +82,23 @@ class SynthesisRequest(BaseModel):
     save_path: Optional[str] = None
 
 
-class CreateLatentsRequest(BaseModel):
-    speaker_name: str
-    language: str = "en"
-
-class ErrorResponse(BaseModel):
-    error: str
-    detail: Optional[str] = None
-
 # =============================================================================
-# UTILITY FUNCTIONS
+# HELPER FUNCTIONS
 # =============================================================================
 
-def get_latents_from_speaker_path(speaker_wav: str, language: str, model) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Get latents from speaker path - either from cache or by computing from audio file"""
-    if not speaker_wav:
-        raise HTTPException(status_code=400, detail="speaker_wav is required")
-
-    # First, try to load from cache using the speaker name as cache key
-    cached_latents = get_latent_from_audio(model, language, speaker_wav, latents_only=True)
-    if cached_latents:
-        return cached_latents
-
-    # Check in speakers folder for actual audio file
-    speaker_wav_wav = get_speakers_dir(language).joinpath(f"{speaker_wav}.wav")
-    if speaker_wav_wav.exists():
-        # Compute latents from the audio file
-        logger.info(f"Computing latents from audio file: {speaker_wav_wav}")
-        return get_latent_from_audio(model, language, str(speaker_wav_wav))
-
-    raise HTTPException(
-        status_code=404, 
-        detail=f"Speaker '{speaker_wav}' not found in speakers folder or cache."
-    )
-
+def get_cached_temp_dir():
+    """Get or create the cached temporary directory"""
+    global CACHED_TEMP_DIR
+    
+    if CACHED_TEMP_DIR is None:
+        CACHED_TEMP_DIR = Path(tempfile.mkdtemp(prefix="skyrimnet_tts_"))
+        logger.info(f"Created cached temp directory: {CACHED_TEMP_DIR}")
+    elif not CACHED_TEMP_DIR.exists():
+        # Recreate if it was somehow deleted
+        CACHED_TEMP_DIR = Path(tempfile.mkdtemp(prefix="skyrimnet_tts_"))
+        logger.info(f"Recreated cached temp directory: {CACHED_TEMP_DIR}")
+    
+    return CACHED_TEMP_DIR
 
 # =============================================================================
 # FASTAPI APPLICATION SETUP
@@ -202,6 +176,7 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
     """
     Generate TTS audio from text with specified speaker voice
     """
+    global IGNORE_PING
     try:
         logger.info(f"Post tts_to_audio - Processing TTS to audio with request: "
                    f"text='{request.text}' speaker_wav='{request.speaker_wav}' "
@@ -210,54 +185,35 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
         if not CURRENT_MODEL:
             raise HTTPException(status_code=500, detail="Model not loaded")
         
-        # Validate inputs
         if not request.text:
             raise HTTPException(status_code=400, detail="Text is required")
         
-        try:
-            language = validate_language(request.language or "en")
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
 
-        if request.text == "ping" and (request.speaker_wav == 'maleeventoned' or request.speaker_wav == 'player voice'):
+        if request.text == "ping" and (request.speaker_wav == 'maleeventoned' or request.speaker_wav == 'player voice') and not IGNORE_PING:
+            IGNORE_PING = True
             return FileResponse(
                 path="assets/silence_100ms.wav",
                 filename=request.save_path,
                 media_type="audio/wav"
             )
+        IGNORE_PING = True
+        
+        try:
+            language = validate_language(request.language or "en")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         
         # Get latents from speaker
-        gpt_cond_latent, speaker_embedding = get_latents_from_speaker_path(request.speaker_wav, language, CURRENT_MODEL)
-        
-        # Check text length and enable splitting if needed
-        enable_text_splitting, char_limit = check_text_length(request.text, CURRENT_MODEL, language)
-        if enable_text_splitting:
-            logger.info(f"Text length {len(request.text)} exceeds limit {char_limit}, enabling text splitting")
-        
-        # Generate audio
-        logger.info("Running model inference...")
-        wav_out = CURRENT_MODEL.inference(
-            text=request.text,
+        speaker_wav = request.speaker_wav or "malecommoner"
+        text = request.text
+
+        wav_out_path = generate_audio_file(
+            model=CURRENT_MODEL,
             language=language,
-            gpt_cond_latent=gpt_cond_latent,
-            speaker_embedding=speaker_embedding,
-            speed=DEFAULT_SPEED,
-            top_p=DEFAULT_TOP_P,
-            top_k=DEFAULT_TOP_K,
-            temperature=DEFAULT_TEMPERATURE,
-            repetition_penalty=DEFAULT_REPETITION_PENALTY,
-            enable_text_splitting=enable_text_splitting,
+            speaker_wav=speaker_wav,
+            text=text
         )
-        
-        # Save audio file
-        wav_out_path = save_torchaudio_wav(
-            wav_tensor=torch.tensor(wav_out["wav"]).unsqueeze(0),
-            sr=24000,
-            audio_path=request.speaker_wav,
-        )
-        
-        logger.info(f"Generated audio saved to: {wav_out_path}")       
-            
+                    
         return FileResponse(
             path=str(wav_out_path),
             filename=request.save_path,
@@ -269,15 +225,17 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
         logger.error(f"POST /tts_to_audio - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+
 @app.post("/create_and_store_latents")
 async def create_and_store_latents(
     speaker_name: str = Form(...),
     language: str = Form("en"),
     wav_file: UploadFile = File(...)
 ):
+    setup_model_seed()
     """
     Create and store latent embeddings from uploaded audio file
-    """
+    """    
     try:
         logger.info(f"POST /create_and_store_latents - Creating and storing latents for speaker: {speaker_name}, language: {language}, file: {wav_file.filename}")
         
@@ -294,9 +252,10 @@ async def create_and_store_latents(
         if not wav_file.filename.endswith('.wav'):
             raise HTTPException(status_code=400, detail="Only WAV files are supported")
         
-        # Save uploaded file temporarily
-        temp_dir = Path(tempfile.mkdtemp())
-        temp_audio_path = temp_dir / wav_file.filename
+        # Use cached temp directory and create unique filename
+        temp_dir = get_cached_temp_dir()
+        #unique_filename = f"{uuid.uuid4().hex}_{wav_file.filename}"
+        temp_audio_path = temp_dir.joinpath(wav_file.filename)
         
         try:
             with open(temp_audio_path, "wb") as buffer:
@@ -320,14 +279,7 @@ async def create_and_store_latents(
             }
             
         finally:
-            # Cleanup temporary file
-            try:
-                if temp_audio_path.exists():
-                    temp_audio_path.unlink()
-                if temp_dir.exists():
-                    temp_dir.rmdir()
-            except Exception as e:
-                logger.warning(f"Failed to cleanup temp files: {e}")
+            temp_audio_path.unlink(missing_ok=True)
                 
     except HTTPException:
         raise
@@ -346,56 +298,97 @@ async def health_check():
     }
 
 
-### Catch-all route for undefined endpoints (must be last)
-#@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
-#async def catch_undefined_endpoints(request: Request, path: str):
-#    """
-#    Catch-all route to log attempts to access undefined endpoints
-#    This helps with debugging missing routes and API discovery
-#    """
-#    logger.warning(f"🚫 UNDEFINED ENDPOINT: {request.method} /{path}")
-#    logger.warning(f"   Full URL: {request.url}")
-#    logger.warning(f"   Available endpoints:")
-#    logger.warning(f"     POST /tts_to_audio")
-#    logger.warning(f"     POST /create_and_store_latents") 
-#    logger.warning(f"     GET  /health")
-#    logger.warning(f"     GET  /docs (Swagger UI)")
-#    logger.warning(f"     GET  /redoc (ReDoc)")
-#    
-#    raise HTTPException(
-#        status_code=404, 
-#        detail={
-#            "error": f"Endpoint not found: {request.method} /{path}",
-#            "available_endpoints": [
-#                "POST /tts_to_audio",
-#                "POST /create_and_store_latents",
-#                "GET /health",
-#                "GET /docs",
-#                "GET /redoc"
-#            ]
-#        }
-#    )
+# =============================================================================
+# CATCH-ALL ROUTE CONFIGURATION
+# =============================================================================
+
+def setup_catch_all_route():
+    """
+    Set up catch-all route for undefined API endpoints.
+    This should only be called when NOT mounting Gradio UI.
+    """
+    @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+    async def catch_undefined_endpoints(request: Request, path: str):
+        """
+        Catch-all route to log attempts to access undefined endpoints
+        This helps with debugging missing routes and API discovery
+        """
+        logger.warning(f"🚫 UNDEFINED ENDPOINT: {request.method} /{path}")
+        logger.warning(f"   Full URL: {request.url}")
+        logger.warning(f"   Available endpoints:")
+        logger.warning(f"     POST /tts_to_audio")
+        logger.warning(f"     POST /create_and_store_latents") 
+        logger.warning(f"     GET  /health")
+        logger.warning(f"     GET  /docs (Swagger UI)")
+        logger.warning(f"     GET  /redoc (ReDoc)")
+        
+        raise HTTPException(
+            status_code=404, 
+            detail={
+                "error": f"Endpoint not found: {request.method} /{path}",
+                "available_endpoints": [
+                    "POST /tts_to_audio",
+                    "POST /create_and_store_latents",
+                    "GET /health",
+                    "GET /docs",
+                    "GET /redoc"
+                ]
+            }
+        )
+
+
+def setup_api_only_catch_all_route():
+    """
+    Set up a limited catch-all route that only catches API paths when Gradio is mounted.
+    This avoids conflicts with Gradio's routing while still providing API endpoint discovery.
+    """
+    @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+    async def catch_undefined_api_endpoints(request: Request, path: str):
+        """
+        Catch-all route for undefined /api/* endpoints only
+        This helps with API debugging without interfering with Gradio
+        """
+        logger.warning(f"🚫 UNDEFINED API ENDPOINT: {request.method} /api/{path}")
+        logger.warning(f"   Full URL: {request.url}")
+        logger.warning(f"   Available API endpoints:")
+        logger.warning(f"     POST /tts_to_audio")
+        logger.warning(f"     POST /create_and_store_latents") 
+        logger.warning(f"     GET  /health")
+        logger.warning(f"     GET  /docs (Swagger UI)")
+        logger.warning(f"     GET  /redoc (ReDoc)")
+        
+        raise HTTPException(
+            status_code=404, 
+            detail={
+                "error": f"API endpoint not found: {request.method} /api/{path}",
+                "available_endpoints": [
+                    "POST /tts_to_audio",
+                    "POST /create_and_store_latents",
+                    "GET /health",
+                    "GET /docs",
+                    "GET /redoc"
+                ],
+                "note": "For the Gradio UI, visit the root path '/'"
+            }
+        )
 
 # =============================================================================
 # MAIN EXECUTION
 # =============================================================================
 
 if __name__ == "__main__":
-    logger.info("Starting SkyrimNet TTS API...")
+    # Initialize application environment
+    initialize_application_environment("SkyrimNet TTS API")
     
-    # Load model
+    # Set up full catch-all route for standalone API mode
+    setup_catch_all_route()
+    
+    # Load model with standardized initialization
     try:
-        CURRENT_MODEL = load_model(use_cpu=args.use_cpu)
-        
-        # Setup model seed for reproducibility
-        setup_model_seed(5272025)
-        
-        # Validate model state
-        validate_model_state(CURRENT_MODEL)
-        
-        # Initialize latent cache
-        init_latent_cache(model=CURRENT_MODEL, supported_languages=SUPPORTED_LANGUAGE_CODES)
-        
+        CURRENT_MODEL = initialize_model_with_cache(
+            use_cpu=args.use_cpu,
+            validate=True
+        )
         logger.info("Model loaded successfully")
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
@@ -403,4 +396,11 @@ if __name__ == "__main__":
     
     # Start server
     logger.info(f"Starting server on {args.server}:{args.port}")
-    uvicorn.run(app, host=args.server, port=args.port, log_level="info")
+    uvicorn.run(
+        app, 
+        host=args.server, 
+        port=args.port, 
+        log_level="info",
+        access_log=False,  # Disable uvicorn's access logging to use our format
+        log_config=None    # Use default Python logging instead of uvicorn's custom format
+    )

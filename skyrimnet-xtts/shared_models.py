@@ -6,11 +6,18 @@ Contains common model loading, initialization, and management functions
 
 import torch
 from loguru import logger
+from typing import Optional, Any
 
 # TTS imports
 from TTS.utils.manage import ModelManager
 from TTS.tts.configs.xtts_config import XttsConfig
 from TTS.tts.models.xtts import Xtts
+
+# Local imports for cache initialization - Handle both direct and module execution
+try:
+    from .shared_config import SUPPORTED_LANGUAGE_CODES
+except ImportError:
+    from shared_config import SUPPORTED_LANGUAGE_CODES
 
 
 # =============================================================================
@@ -45,11 +52,9 @@ def load_model(model_name="xtts_v2", use_cpu=False):
         model = Xtts.init_from_config(config)
         
         # Load checkpoint and set device
-        if use_cpu: #or is_frozen:
-            # Force CPU mode in PyInstaller to avoid CUDA compilation issues
+        if use_cpu:
             model.load_checkpoint(config, checkpoint_dir=output_model_path)
             model.cpu()
-            #logger.info("Model loaded on CPU (PyInstaller safe mode)" if is_frozen else "Model loaded on CPU")
             logger.info("Model loaded on CPU")
 
         else:
@@ -67,7 +72,7 @@ def load_model(model_name="xtts_v2", use_cpu=False):
         raise
 
 
-def setup_model_seed(seed=None):
+def setup_model_seed(seed=None, randomize=False):
     """
     Set up random seed for reproducible model inference
     
@@ -77,8 +82,11 @@ def setup_model_seed(seed=None):
     Returns:
         int: The seed that was set
     """
-    if seed is None:
+    if randomize:
         seed = torch.randint(0, 2**32 - 1, (1,)).item()
+    elif seed is None:
+        seed = 20250527
+
     
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -185,3 +193,48 @@ def prepare_inference_params(temperature=0.7, top_p=1.0, top_k=50, speed=1.0,
     
     logger.debug(f"Inference parameters: {params}")
     return params
+
+
+def initialize_model_with_cache(
+    use_cpu: bool = False, 
+    seed: Optional[int] = None,
+    validate: bool = True
+) -> Any:
+    """
+    Complete model initialization with caching setup.
+    
+    Args:
+        use_cpu: Whether to use CPU instead of CUDA
+        seed: Random seed for reproducibility (optional)
+        validate: Whether to validate model state after loading
+        
+    Returns:
+        Loaded and initialized model
+        
+    Raises:
+        Exception: If model loading fails
+    """
+    logger.info("Starting model initialization...")
+    
+    try:
+        # Load model
+        model = load_model(use_cpu=use_cpu)
+        
+        setup_model_seed(seed)
+        
+        # Validate model state
+        if validate:
+            validate_model_state(model)
+        
+        # Initialize latent cache import here to avoid circular imports
+        try:
+            from .shared_cache_utils import init_latent_cache  
+        except ImportError:
+            from shared_cache_utils import init_latent_cache
+        init_latent_cache(model=model, supported_languages=SUPPORTED_LANGUAGE_CODES)
+        
+        return model
+        
+    except Exception as e:
+        logger.error(f"Failed to load model: {e}")
+        raise

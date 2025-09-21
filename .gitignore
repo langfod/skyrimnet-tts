@@ -58,3 +58,9 @@ memory.json
 /latent_speaker_folder
 /latents_pt
 /archive
+/temp_test_scripts
+link.exe.config
+dumpbin.exe
+link.exe
+mspdbcore.dll
+tbbmalloc.dll

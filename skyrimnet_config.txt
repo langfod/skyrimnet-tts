@@ -29,6 +29,7 @@ repetition_penalty = default
 
 # SPEED: How fast the speech is (0.5 to 2.0)
 # 1.0 = normal speed, higher may cause artifacts
+# speaking_rate
 speed = default
 
 

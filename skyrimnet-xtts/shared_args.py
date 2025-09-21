@@ -33,11 +33,11 @@ COMMON_ARGS = {
 # Default values per application type
 DEFAULT_VALUES = {
     "api": {
-        "server": "localhost",
+        "server": "0.0.0.0",
         "port": 7860
     },
     "gradio": {
-        "server": "localhost",
+        "server": "0.0.0.0",
         "port": 7860
     }
 }

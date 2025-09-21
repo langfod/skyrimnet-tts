@@ -11,5 +11,6 @@ spacy[ja]
 pydantic
 loguru
 uvicorn
+transformers<4.56.0 #until coqui-tts updates to support it
 coqui-tts[languages]
 gradio

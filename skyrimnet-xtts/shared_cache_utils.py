@@ -2,7 +2,7 @@ import functools
 import threading
 import psutil
 import torch
-from datetime import datetime, timezone
+from datetime import datetime
 import torchaudio
 import os
 import warnings
@@ -80,17 +80,18 @@ def get_cache_key(audio_path, uuid: int | None = None) -> Optional[str]:
         return None
 
     cache_prefix = Path(audio_path).stem
-    if uuid is not None:
-        # Convert UUID to hex string for readability
-        try:
-            uuid_hex = hex(uuid)[2:]  # Remove '0x' prefix
-        except (TypeError, ValueError):
-            uuid_hex = str(uuid)
-
-        cache_key = f"{cache_prefix}_{uuid_hex}"
-    else:
-        cache_key = cache_prefix    
-    return cache_key
+    #if uuid is not None:
+    #    # Convert UUID to hex string for readability
+    #    try:
+    #        uuid_hex = hex(uuid)[2:]  # Remove '0x' prefix
+    #    except (TypeError, ValueError):
+    #        uuid_hex = str(uuid)
+#
+    #    cache_key = f"{cache_prefix}_{uuid_hex}"
+    #else:
+    #    cache_key = cache_prefix    
+    #return cache_key
+    return cache_prefix
 
 
 def load_pt_latents(path, device):
@@ -120,7 +121,7 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
         return None, None
     
     cache_file_key = get_cache_key(speaker_audio, speaker_audio_uuid)
-
+    #logger.info(f"Fetching latents for {speaker_audio} with cache key {cache_file_key}")
     # Check in-memory cache first
     cached = cache_manager.get(language, cache_file_key)
     if cached:
@@ -146,7 +147,9 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
             f"Computing latents for {speaker_audio} and caching to {latent_filename}")
         
         # get_conditioning_latents returns a tuple (gpt_cond_latent, speaker_embedding)
-        latent_result = model.get_conditioning_latents(audio_path=[speaker_audio])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            latent_result = model.get_conditioning_latents(audio_path=[speaker_audio])
         
         # Handle both tuple and potential dict return types for compatibility
         if isinstance(latent_result, tuple):
@@ -157,8 +160,7 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
         else:
             raise TypeError(f"Unexpected return type from get_conditioning_latents: {type(latent_result)}")
         
-        logger.info(
-            f"Computed latents shapes: gpt_cond_latent={gpt_cond_latent.shape}, speaker_embedding={speaker_embedding.shape}")
+        #logger.info(f"latents shapes: gpt_cond_latent={gpt_cond_latent.shape}, speaker_embedding={speaker_embedding.shape}")
 
         latents = {"gpt_cond_latent": gpt_cond_latent,
                    "speaker_embedding": speaker_embedding}
@@ -223,6 +225,10 @@ def get_wavout_dir():
 def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid: int = None) -> Path:
     """Save a tensor as a WAV file using torchaudio"""
 
+    if wav_tensor.device.type != 'cpu':
+        #logger.debug(f"Converting tensor from {wav_tensor.device} to CPU for audio saving")
+        wav_tensor = wav_tensor.cpu()
+
     formatted_now_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     filename = f"{formatted_now_time}_{get_cache_key(audio_path, uuid)}"
@@ -230,4 +236,5 @@ def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid: int = None) -> Path:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         torchaudio.save(path, wav_tensor, sr, encoding="PCM_S")
-    return path.resolve()
+    del wav_tensor
+    return path #.resolve()

@@ -69,7 +69,7 @@ After starting the module, you can access:
 - `shared_config.py` - Common configuration and constants
 - `shared_models.py` - Model loading and management
 - `shared_args.py` - Command line argument parsing
-- `utils.py` - Utility functions for TTS operations
+- `shared_cache_utils.py` - Utility functions for TTS cache operations
 
 ## Features
 

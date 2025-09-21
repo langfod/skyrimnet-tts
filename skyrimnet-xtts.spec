@@ -363,6 +363,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[
         "pyinstaller-hooks/rthook_disable_typeguard.py",
+        "pyinstaller-hooks/rthook_setup_cuda_path.py",
     ],
     excludes=excludedimports,
     noarchive=False,
@@ -378,45 +379,53 @@ a = Analysis(
     upx=True,
 )
 
-# Additional post-processing to remove bloat
+# =============================================================================
+# NVIDIA CUDA DLL EXCLUSION - Remove system-provided CUDA libraries
+# =============================================================================
+# These DLLs will be loaded from the system CUDA installation
+# CUDA_PATH environment variable points to: C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9
+# DLLs are available in: %CUDA_PATH%\bin\
+
+cuda_dlls_to_exclude = [
+    # ULTRA-CONSERVATIVE APPROACH: Only exclude the absolutely safe CUDA runtime DLL
+    # Testing shows shm.dll loading issues - reducing exclusions to minimal set
+    
+    # CUDA Runtime (available in system CUDA installation)
+    'cudart64_12.dll',                          # 0.6 MB - CUDA Runtime - SAFE TO EXCLUDE
+    
+    # Temporarily removing other exclusions to debug shm.dll loading issue
+    # Will re-add after confirming application starts correctly
+    
+    # NOTE: Keep these PyTorch-required DLLs that were previously excluded:
+    'cublas64_12.dll', # (97.8 MB) - Required by torch_cuda.dll
+    'cublaslt64_12.dll', # (638 MB) - Required by torch_cuda.dll
+    'cufft64_11.dll', # (274 MB) - Required by torch_cuda.dll
+    'cufftw64_11.dll', # (0.2 MB) - FFTW Interface
+    'curand64_10.dll', # (75.5 MB) - Random Number Generation
+    'cusolver64_11.dll', # (270 MB) - Required by torch_cuda.dll
+    'cusparse64_12.dll', # (455.4 MB) - Required by torch_cuda.dll
+    'nvrtc64_120_0.dll', # (85.7 MB) - Runtime Compilation
+    # - cudnn64_9.dll (0.3 MB) - Required by torch_cuda.dll
+    # - cudnn_cnn64_9.dll (4.4 MB) - Core CNN operations
+    # - cudnn_ops64_9.dll (120.6 MB) - Core operations
+    # - cudnn_engines_runtime_compiled64_9.dll (19.3 MB) - Runtime engines
+    # - cudnn_graph64_9.dll (2.3 MB) - Graph operations
+]
+
+# Additional post-processing to remove bloat and CUDA system libraries
 a.datas = [x for x in a.datas if not any([
     # Remove .lib files (redundant with collect_data_files exclusions, but some may slip through)
     x[0].lower().endswith('.lib') and 'dnnl' in x[0].lower(),
     x[0].lower().endswith('.lib') and any(huge in x[0].lower() for huge in ['cublas', 'cudnn', 'cufft', 'cusolver']),
-    # CRITICAL: Exclude cuDNN training/optimization DLLs (collect_data_files doesn't handle these reliably)
-    # Be conservative - only exclude the largest clearly training-specific libraries
-    #'cudnn_engines_precompiled64_9.dll' in x[0].lower(),    # 490 MB
-    'cudnn_adv64_9.dll' in x[0].lower(),                    # 269 MB  
-    #'cudnn_ops64_9.dll' in x[0].lower(),                    # 121 MB
-    #'cudnn_heuristic64_9.dll' in x[0].lower(),              # 54 MB
-    # Exclude NVRTC alternative DLL (keep main nvrtc64_120_0.dll)
-    'nvrtc64_120_0.alt.dll' in x[0].lower(),
-    # OPTIONAL: Uncomment these to exclude additional large libraries (test carefully):
-    'cublaslt64_12.dll' in x[0].lower(),    # 638 MB - may be needed for torch.compile
-    'cufft64_11.dll' in x[0].lower(),       # 274 MB - may be needed for audio processing  
-    'cusolver64_11.dll' in x[0].lower(),    # 270 MB - linear algebra solvers
-    'cusolverMg64_11.dll' in x[0].lower(),  # 179 MB - multi-GPU solvers
+    
+    # CRITICAL: Exclude NVIDIA CUDA system DLLs - users will have these installed
+    any(cuda_dll.lower() in x[0].lower() for cuda_dll in cuda_dlls_to_exclude),
 ])]
 
-# CRITICAL: Remove cuDNN DLLs from binaries as well (they get pulled in as binary dependencies)
+# CRITICAL: Remove NVIDIA CUDA DLLs from binaries as well (they get pulled in as binary dependencies)
 a.binaries = [x for x in a.binaries if not any([
-    # Exclude ONLY the largest cuDNN training/optimization DLLs (be conservative)
-    #'cudnn_engines_precompiled64_9.dll' in x[0].lower(),    # 490 MB - precompiled engines
-    'cudnn_adv64_9.dll' in x[0].lower(),                    # 269 MB - advanced features  
-    #'cudnn_ops64_9.dll' in x[0].lower(),                    # 121 MB - operations library
-    #'cudnn_heuristic64_9.dll' in x[0].lower(),              # 54 MB - heuristics
-    # Keep these cuDNN libraries (may be needed for inference):
-    # cudnn_cnn64_9.dll                   # 4 MB - core CNN operations
-    # cudnn_engines_runtime_compiled64_9.dll # 19 MB - runtime compilation
-    # cudnn_graph64_9.dll                 # 2 MB - graph operations  
-    # cudnn64_9.dll                       # 0.3 MB - main library
-    # Exclude NVRTC alternative DLL
-    'nvrtc64_120_0.alt.dll' in x[0].lower(),
-    # OPTIONAL: Uncomment these to exclude additional large libraries:
-    'cublaslt64_12.dll' in x[0].lower(),    # 638 MB
-    'cufft64_11.dll' in x[0].lower(),       # 274 MB  
-    'cusolver64_11.dll' in x[0].lower(),    # 270 MB
-    'cusolverMg64_11.dll' in x[0].lower(),  # 179 MB
+    # Exclude all NVIDIA CUDA system DLLs - users will have these installed via CUDA toolkit
+    any(cuda_dll.lower() in x[0].lower() for cuda_dll in cuda_dlls_to_exclude),
 ])]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)

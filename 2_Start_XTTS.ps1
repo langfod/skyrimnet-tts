@@ -28,7 +28,9 @@ Notes:
 #>
 
 param(
-    [switch]$cpu
+    [switch]$cpu,
+    [string]$server = "0.0.0.0",
+    [int]$port = 7860
 )
 
 function Show-Banner {
@@ -108,10 +110,10 @@ if (-not (Test-Path $moduleToRun)) {
     exit 1
 }
 
-# Build Python script arguments
-$pythonArgs = ""
+# Build Python script arguments - use parameters with defaults
+$pythonArgs = "--server $server --port $port"
 if ($cpu) {
-    $pythonArgs = "--cpu"
+    $pythonArgs = "$pythonArgs --use_cpu"
     Write-Host "CPU mode enabled" -ForegroundColor Cyan
 }
 

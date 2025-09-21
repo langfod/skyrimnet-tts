@@ -5,37 +5,40 @@ Enhanced with disk and memory caching for speaker embeddings
 """
 
 # Standard library imports
-import functools
 from pathlib import Path
-import sys
-import time
+import uuid
 
 
 # Third-party imports
 import gradio as gr
-import time
-import torch
 from loguru import logger
-from utils import get_latent_from_audio, init_latent_cache, save_torchaudio_wav, get_wavout_dir, get_latent_dir, get_speakers_dir, get_cache_key
 
-# Shared module imports
-from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES, DEFAULT_TTS_PARAMS, DEFAULT_CACHE_CONFIG, validate_language
-from shared_models import load_model, check_text_length
-from shared_args import parse_gradio_args
+# Handle both direct execution and module execution
+try:
+    # Try relative imports first (for module execution: python -m skyrimnet-xtts)
+    from .shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
+    from .shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language
+    from .shared_args import parse_gradio_args
+    from .shared_audio_utils import generate_audio_file
+    from .shared_app_utils import initialize_application_environment
+    from .shared_models import initialize_model_with_cache, setup_model_seed
+except ImportError:
+    # Fall back to absolute imports (for direct execution: python skyrimnet_xtts.py)
+    from shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
+    from shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language
+    from shared_args import parse_gradio_args
+    from shared_audio_utils import generate_audio_file
+    from shared_app_utils import initialize_application_environment
+    from shared_models import initialize_model_with_cache, setup_model_seed
 
 # =============================================================================
 # GLOBAL CONFIGURATION AND CONSTANTS
 # =============================================================================
 
-# Initialize environment
-setup_environment()
-
 # Global model state
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
-SPEAKER_EMBEDDING = None
-SPEAKER_AUDIO_PATH = None
-
+IGNORE_PING = False
 # Cache flags - defaults that can be overridden by skyrimnet_config.txt
 ENABLE_DISK_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_DISK_CACHE"]
 ENABLE_MEMORY_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_MEMORY_CACHE"]
@@ -43,252 +46,197 @@ _CONFIG_CACHE = None
 _CONFIG_FILE_PATH = "skyrimnet_config.txt"
 # Testing flag - when True, bypasses config loading and uses all API values
 _USE_API_MODE = False
-
+_FROM_GRADIO = False
+STREAM = True
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
 
-args = parse_gradio_args("Zonos Text-to-Speech Application with Gradio Interface")
+args = parse_gradio_args("XTTS Text-to-Speech Application with Gradio Interface")
 
 # =============================================================================
 # Support Functions
 # =============================================================================
 
 def load_skyrimnet_config():
-    """Load configuration from skyrimnet_config.txt with error handling"""
+    """Load configuration from skyrimnet_config.txt - simplified version"""
     global _CONFIG_CACHE, ENABLE_MEMORY_CACHE, ENABLE_DISK_CACHE
     
     if _CONFIG_CACHE is not None:
         return _CONFIG_CACHE
     
-    # Default configuration - using shared defaults from shared_config
-    default_config = {
-        'temperature': DEFAULT_TTS_PARAMS["TEMPERATURE"],
-        'top_p': DEFAULT_TTS_PARAMS["TOP_P"],
-        'top_k': DEFAULT_TTS_PARAMS["TOP_K"],
-        'speed': DEFAULT_TTS_PARAMS["SPEED"],
-        'repetition_penalty': DEFAULT_TTS_PARAMS["REPETITION_PENALTY"],
-    }
-    
-    global_flags = {
-        'enable_memory_cache': ENABLE_MEMORY_CACHE,
-        'enable_disk_cache': ENABLE_DISK_CACHE
-    }
-    
-    config_mode = {
-        'temperature': 'default',
-        'top_p': 'default',
-        'top_k': 'default',
-        'speed': 'default',
-        'repetition_penalty': 'default'
-    }
-    
-    try:
-        config_path = Path(_CONFIG_FILE_PATH)
-        if not config_path.exists():
-            logger.warning(f"Config file {_CONFIG_FILE_PATH} not found, using hardcoded defaults")
-            _CONFIG_CACHE = (default_config, config_mode, global_flags)
-            return _CONFIG_CACHE
-            
-        with open(config_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            
-        for line in lines:
-            line = line.strip()
-            # Skip comments and empty lines
-            if not line or line.startswith('#'):
-                continue
-                
-            if '=' in line:
-                key, value = line.split('=', 1)
-                key = key.strip()
-                value = value.strip()
-                
-                # Handle global boolean flags
-                if key in global_flags:
-                    if value.lower() in ['true', 'yes', '1', 'on']:
-                        global_flags[key] = True
-                        # Update global variables
-                        if key == 'enable_memory_cache':
-                            ENABLE_MEMORY_CACHE = True
-                        elif key == 'enable_disk_cache':
-                            ENABLE_DISK_CACHE = True
-                        logger.info(f"Setting {key} to True")
-                    elif value.lower() in ['false', 'no', '0', 'off']:
-                        global_flags[key] = False
-                        # Update global variables
-                        if key == 'enable_memory_cache':
-                            ENABLE_MEMORY_CACHE = False
-                        elif key == 'enable_disk_cache':
-                            ENABLE_DISK_CACHE = False
-                        logger.info(f"Setting {key} to False")
-                    else:
-                        logger.warning(f"Invalid boolean value '{value}' for {key}, using default")
-                
-                # Handle parameter modes
-                elif key in config_mode:
-                    if value.lower() == 'default':
-                        config_mode[key] = 'default'
-                    elif value.lower() == 'api':
-                        config_mode[key] = 'api'
-                    else:
-                        try:
-                            custom_value = float(value)
-                            config_mode[key] = 'custom'
-                            default_config[key] = custom_value
-                            logger.info(f"Using custom {key} value: {custom_value}")
-                        except ValueError:
-                            logger.warning(f"Invalid value '{value}' for {key}, using default")
+    # Simple config loading - just get user overrides from file
+    config_overrides = {}
+    if Path(_CONFIG_FILE_PATH).exists():
+        try:
+            with open(_CONFIG_FILE_PATH, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip().lower()
+                            value = value.strip()
                             
-        logger.info(f"Loaded config: {config_mode}")
-        logger.info(f"Global flags: {global_flags}")
-        _CONFIG_CACHE = (default_config, config_mode, global_flags)
-        return _CONFIG_CACHE
-        
-    except Exception as e:
-        logger.error(f"Error reading config file {_CONFIG_FILE_PATH}: {e}, using hardcoded defaults")
-        _CONFIG_CACHE = (default_config, config_mode, global_flags)
-        return _CONFIG_CACHE
-
-def get_config_value(param_name, api_value, defaults, modes, bypass_config=False):
-    """Get the appropriate value based on configuration mode"""
-    if bypass_config:
-        # API mode: use API value with fallback to shared defaults
-        fallback_defaults = {
-            'temperature': DEFAULT_TTS_PARAMS["TEMPERATURE"],
-            'top_p': DEFAULT_TTS_PARAMS["TOP_P"],
-            'top_k': DEFAULT_TTS_PARAMS["TOP_K"],
-            'speed': DEFAULT_TTS_PARAMS["SPEED"],
-            'repetition_penalty': DEFAULT_TTS_PARAMS["REPETITION_PENALTY"],
-        }
-        return api_value if api_value is not None else fallback_defaults.get(param_name, 0.0)
+                            # Parse TTS parameters
+                            if key in ['temperature', 'top_p', 'speed', 'repetition_penalty']:
+                                if value.lower() != "default":
+                                    try:
+                                        config_overrides[key] = float(value)
+                                    except ValueError:
+                                        logger.warning(f"Invalid value for {key}: {value}")
+                            elif key == 'top_k':
+                                if value.lower() != "default":
+                                    try:
+                                        config_overrides[key] = int(value)
+                                    except ValueError:
+                                        logger.warning(f"Invalid value for {key}: {value}")
+                            # Parse cache flags
+                            elif key == 'enable_memory_cache':
+                                ENABLE_MEMORY_CACHE = value.lower() in ['true', '1', 'yes', 'on']
+                            elif key == 'enable_disk_cache':
+                                ENABLE_DISK_CACHE = value.lower() in ['true', '1', 'yes', 'on']
+        except Exception as e:
+            logger.warning(f"Error loading config file {_CONFIG_FILE_PATH}: {e}")
     
-    mode = modes.get(param_name, 'default')
+    _CONFIG_CACHE = config_overrides
+    return _CONFIG_CACHE
+
+def get_config_override(param_name, api_value):
+    """Get config override value, only using API value in API mode"""
+    config_overrides = load_skyrimnet_config()
+    config_value = config_overrides.get(param_name)
     
-    if mode == 'api':
-        return api_value if api_value is not None else defaults[param_name]
-    else:  # 'default' or 'custom'
-        return defaults[param_name]
-
-
-def reload_config():
-    """Force reload of configuration file"""
-    global _CONFIG_CACHE
-    _CONFIG_CACHE = None
-    return load_skyrimnet_config()
-
-
-def set_seed(seed: int):
-    """
-    Set random seeds for reproducible generation.
-    """
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-
-
-@functools.cache
-def cpp_uuid_to_seed(uuid_64: int) -> int:
-    """
-    Convert a 64-bit UUID to a valid PyTorch seed (0 to 2^32 - 1).
-    Uses hash() for better distribution across the seed space.
-    """
-    return abs(hash(uuid_64)) % (2**32)
+    # Only use API values if explicitly in API mode or from Gradio web interface
+    if (_USE_API_MODE or _FROM_GRADIO) and api_value is not None:
+        return api_value
+    
+    # Otherwise, only return config file value (ignore API value)
+    return config_value
 
 
 # =============================================================================
 # MAIN APPLICATION FUNCTIONS
 # =============================================================================
 
-
-def generate_audio(model_choice=None, text=None, language="en", speaker_audio=None, prefix_audio=None, e1=None, e2=None, e3=None, e4=None, e5=None, e6=None, e7=None, e8=None,
-                  vq_single=None, fmax=None, pitch_std=None, speaking_rate=None, dnsmos_ovrl=None, speaker_noised=None, cfg_scale=None, top_p=None,
-                  top_k=None, min_p=None, linear=None, confidence=None, quadratic=None, seed=None, randomize_seed=None, unconditional_keys=None,
-                  ):
+def generate_audio(model_choice:str=None, text:str=None, language:str="en", speaker_audio:str=None, prefix_audio:str=None,
+                    e1:float=None, e2:float=None, e3:float=None, e4:float=None, e5:float=None, e6:float=None, e7:float=None, e8:float=None,
+                  vq_single:float=None, fmax:int=None, pitch_std:float=None, speaking_rate:float=None, dnsmos_ovrl:float=None, speaker_noised:float=None, cfg_scale:float=None, top_p:float=None,
+                  min_k:float=None, min_p:float=None, linear:float=None, confidence:float=None, quadratic:float=None, seed:int=None, randomize_seed:bool=None, unconditional_keys:float=None
+                  ) -> tuple[Path, int]:
     """
     Generates audio based on the provided UI parameters with enhanced caching.
     """
+    global IGNORE_PING
+
     language = validate_language(language)
+    if isinstance(speaker_audio, dict) and 'path' in speaker_audio:
+        speaker_audio = speaker_audio['path']
     logger.info(f"inputs: text={text}, language={language}, speaker_audio={Path(speaker_audio).stem if speaker_audio else 'None'}, seed={seed}")
-    # Start timing the entire function
-    func_start_time = time.perf_counter()
 
-    # Load config (or use empty values for API mode)
-    if _USE_API_MODE:
-        defaults, modes = {}, {}
-    else:
-        defaults, modes, flags = load_skyrimnet_config()
+    #if text == "ping" and (speaker_audio is None or speaker_audio == 'maleeventoned' or speaker_audio == 'player voice'):
+    #logger.info("Ping received.")
+    #if text == "ping" and (speaker_audio is None or speaker_audio == 'maleeventoned' or speaker_audio == 'player voice') and not IGNORE_PING:
+    #    IGNORE_PING = True
+    #    #logger.info("Ping sending silence audio.")
+    #    return "assets/silence_100ms.wav", seed
+    #IGNORE_PING = True
 
-    # Convert parameters to appropriate types
-    #speaker_noised_bool = bool(speaker_noised)
-    #fmax = float(fmax)
-    #pitch_std = float(pitch_std)
-    #speaking_rate = float(speaking_rate)
-    #dnsmos_ovrl = float(dnsmos_ovrl)
-    #cfg_scale = float(cfg_scale)
-    #top_p = float(top_p)
-    #top_k = int(top_k)
-    #min_p = float(min_p)
-    #linear = float(linear)
-    #confidence = float(confidence)
-    #quadratic = float(quadratic)
-    #seed = int(seed)
-
-    # Handle speaker audio caching
-    global SPEAKER_AUDIO_PATH, SPEAKER_EMBEDDING
-
-    speaker_audio_uuid = seed
-
-    seed = torch.randint(0, 2**32 - 1, (1,)).item() if seed is None or randomize_seed else cpp_uuid_to_seed(seed)
-    torch.manual_seed(seed)
+    speaker_audio_uuid = seed      
     
-    enable_text_splitting, char_limit = check_text_length(text, CURRENT_MODEL, language)
-    if enable_text_splitting:
-        logger.warning(f"Text length {len(text)} exceeds limit {char_limit} for language '{language}'. Enabling text splitting.")
-    
+    setup_model_seed(randomize=randomize_seed)
+
     if speaker_audio is None or speaker_audio.strip() == "":
         speaker_audio = "malebrute"
 
-    gpt_cond_latent, speaker_embedding = get_latent_from_audio(CURRENT_MODEL, language, speaker_audio, speaker_audio_uuid)
-    
-    # Get effective parameter values using config system
-    effective_temperature = get_config_value('temperature', None, defaults, modes, _USE_API_MODE)
-    effective_top_p = get_config_value('top_p', top_p, defaults, modes, _USE_API_MODE)
-    effective_top_k = get_config_value('top_k', top_k, defaults, modes, _USE_API_MODE)
-    effective_speed = get_config_value('speed', speaking_rate, defaults, modes, _USE_API_MODE)
-    effective_repetition_penalty = get_config_value('repetition_penalty', confidence, defaults, modes, _USE_API_MODE)
-    
-    wav_out = CURRENT_MODEL.inference(
-    text=text, language=language,
-    gpt_cond_latent=gpt_cond_latent,
-    speaker_embedding=speaker_embedding,
-    speed=effective_speed,
-    top_p=effective_top_p,
-    top_k=effective_top_k,
-    temperature=effective_temperature,
-    repetition_penalty=effective_repetition_penalty,
-    enable_text_splitting=enable_text_splitting,
-    )
-    wav_out_path = save_torchaudio_wav(wav_tensor=torch.tensor(wav_out["wav"]).unsqueeze(0), sr=24000, audio_path=speaker_audio, uuid=speaker_audio_uuid)
+    # Get parameter overrides - only pass non-None values
+    inference_kwargs = {}   
 
-    #save_torchaudio_wav(wav_tensor, sr, audio_path, uuid):
-    # Log execution time
-    func_end_time = time.perf_counter()
-    total_duration_s = func_end_time - func_start_time
-    if speaker_audio:
-        logger.info(f"Total 'generate_audio' for {speaker_audio.split('\\')[-1]} execution time: {total_duration_s:.2f} seconds")
+    # Only use API parameters when explicitly from Gradio web interface or API mode is enabled
+    use_api_params = _FROM_GRADIO or _USE_API_MODE
+
+    # Convert parameters if we're using API mode 
+    if use_api_params and not _FROM_GRADIO:
+        # Convert parameters for Gradio API calls
+        speaking_rate = float(speaking_rate) if speaking_rate is not None else None
+        top_p = float(top_p) if top_p is not None else None
+        min_k = int(min_k) if min_k is not None else None
+        linear = float(linear) if linear is not None else None
+        confidence = float(confidence) if confidence is not None else None
+    elif _FROM_GRADIO or _USE_API_MODE:
+        # Convert parameters for web UI calls
+        speaking_rate = float(speaking_rate)
+        top_p = float(top_p)
+        min_k = int(min_k)
+        linear = float(linear)
+        confidence = float(confidence)
+    
+    if use_api_params:
+        # Use API parameters directly when in API mode (Gradio web interface)
+        if linear is not None:
+            inference_kwargs['temperature'] = linear
+        if top_p is not None:
+            inference_kwargs['top_p'] = top_p
+        if min_k is not None:
+            inference_kwargs['top_k'] = min_k
+        if speaking_rate is not None:
+            inference_kwargs['speed'] = speaking_rate
+        if confidence is not None:
+            inference_kwargs['repetition_penalty'] = confidence
+        logger.info(f"Using API parameters: temp={linear}, top_p={top_p}, top_k={min_k}, speed={speaking_rate}, rep_penalty={confidence}")
     else:
-        logger.info(f"Total 'generate_audio' execution time: {total_duration_s:.2f} seconds")
-    sys.stdout.flush()
+        temp_override = get_config_override('temperature', linear)
+        if temp_override is not None:
+            inference_kwargs['temperature'] = temp_override
 
+        top_p_override = get_config_override('top_p', top_p)
+        if top_p_override is not None:
+            inference_kwargs['top_p'] = top_p_override
+
+        top_k_override = get_config_override('top_k', min_k)
+        if top_k_override is not None:
+            inference_kwargs['top_k'] = top_k_override
+
+        speed_override = get_config_override('speed', speaking_rate)
+        if speed_override is not None:
+            inference_kwargs['speed'] = speed_override
+
+        repetition_penalty_override = get_config_override('repetition_penalty', confidence)
+        if repetition_penalty_override is not None:
+            inference_kwargs['repetition_penalty'] = repetition_penalty_override
+    
+    # Always pass the stream parameter
+    logger.debug(f"Inference kwargs: {inference_kwargs}")
+    # Use shared audio generation function with only necessary kwargs
+    wav_out_path = generate_audio_file(
+        model=CURRENT_MODEL,
+        language=language,
+        speaker_wav=speaker_audio,
+        text=text,
+        uuid=speaker_audio_uuid,
+        stream=STREAM,
+        **inference_kwargs
+    )
     return wav_out_path, speaker_audio_uuid
 
 
+def generate_gradio_audio(model_choice, text, language, speaker_audio, prefix_audio, 
+                speed, top_p,top_k, temperature, repetition_penalty, uuid_number) -> tuple[Path, int]:
+    global _FROM_GRADIO
+    _FROM_GRADIO = True
+    wav_out_path, speaker_audio_uuid = generate_audio(model_choice=model_choice, text=text, language=language, speaker_audio=speaker_audio, prefix_audio=prefix_audio,
+                           speaking_rate=speed, top_p=top_p, min_k=top_k, linear=temperature, confidence=repetition_penalty, seed=uuid_number)
+    _FROM_GRADIO = False
+    return wav_out_path, speaker_audio_uuid
+
 def build_interface():
+
     """Build and return the Gradio interface with cache management."""
     output_temp = get_wavout_dir().parent.absolute()
     latents_dir = get_latent_dir().parent.absolute()
     speakers_dir = get_speakers_dir().parent.absolute()
 
+    
     gr.set_static_paths([output_temp, latents_dir, speakers_dir])
     with gr.Blocks(analytics_enabled=False, title="XTTS") as demo:
         gr.Markdown("# XTTS with Speaker Embedding Cache")
@@ -301,14 +249,15 @@ def build_interface():
                 language = gr.Dropdown(choices=SUPPORTED_LANGUAGE_CODES, value="en", label="Language Code", allow_custom_value=True)
 
             with gr.Column():
+                prefix_audio = gr.Audio( label="Optional Reference Audio (for style)", type="filepath",sources=["upload", "microphone"])
                 speaker_audio = gr.Audio(label="Optional Speaker Audio (for cloning)", type="filepath",sources=["upload", "microphone"])
-                enable_text_splitting = gr.Checkbox(value=True, label="Enable Text Splitting")
 
         with gr.Row():
             with gr.Column():
                 gr.Markdown("## Conditioning Parameters")
                 temperature = gr.Slider(0, 2, value=1, step=0.01, label="Temperature")
-                top_k = gr.Slider(1, 100, value=50, step=1, label="Top-K")
+                repetition_penalty = gr.Slider(1, 3, value=2, step=0.1, label="Repetition Penalty")
+                top_k = gr.Slider(1, 100, value=50, step=1, label="Top-K", precision=0)
                 top_p = gr.Slider(0, 1, value=1, step=0.01, label="Top-P")
                 speed = gr.Slider(0.5, 2, value=1.0, step=0.01, label="Speed")
 
@@ -317,9 +266,7 @@ def build_interface():
             output_audio = gr.Audio(label="Generated Audio", type="filepath", autoplay=True)
 
         model_choice = gr.Textbox(visible=False)
-        #language = gr.Textbox(visible=False)
-        #speaker_audio = gr.Audio(sources=["upload", "microphone"], type="filepath", label="Reference Audio File", value=None, visible=False)
-        prefix_audio = gr.Audio(sources=["upload", "microphone"], type="filepath", label="Reference Audio File", value=None, visible=False)
+        #prefix_audio = gr.Audio(sources=["upload", "microphone"], type="filepath", label="Reference Audio File", value=None, visible=False)
         emotion1 = gr.Number(visible=False)
         emotion2 = gr.Number(visible=False)
         emotion3 = gr.Number(visible=False)
@@ -332,27 +279,34 @@ def build_interface():
         fmax = gr.Number(visible=False)
         pitch_std = gr.Number(visible=False)
         speaking_rate = gr.Number(visible=False)
-        dnsmos = gr.Number(visible=False)
-        speaker_noised_checkbox = gr.Checkbox(visible=False)
+        dnsmos_ovrl = gr.Number(visible=False)
+        speaker_noised = gr.Checkbox(visible=False)
         cfg_scale = gr.Number(visible=False)
         min_k = gr.Number(visible=False)
         min_p = gr.Number(visible=False)
         linear = gr.Number(visible=False)
         confidence = gr.Number(visible=False)
         quadratic = gr.Number(visible=False)
-        randomize_seed_toggle = gr.Checkbox(visible=False)
+        randomize_seed = gr.Checkbox(visible=False)
         unconditional_keys = gr.Textbox(visible=False)
-        seed_number = gr.Number(visible=False)
+        uuid_number = gr.Number(visible=False, value=uuid.uuid4())
+        speed_input = gr.Number(visible=False)
+        top_p_input = gr.Number(visible=False)
+        top_k_input = gr.Number(visible=False)
+        temperature_input = gr.Number(visible=False)
+        repetition_penalty_input = gr.Number(visible=False)
 
-        generate_button.click(fn=generate_audio,
-            inputs=[model_choice, text, language, speaker_audio, prefix_audio, emotion1, emotion2, emotion3, emotion4,
-                emotion5, emotion6, emotion7, emotion8, vq_single, fmax, pitch_std,
-                speaking_rate, dnsmos, speaker_noised_checkbox, cfg_scale, top_p,
-                min_k, min_p, linear, confidence, quadratic, seed_number,
-                randomize_seed_toggle, unconditional_keys, ], outputs=[output_audio, seed_number], )
+        generate_button.click(fn=generate_gradio_audio,
+            inputs=[model_choice, text, language, speaker_audio, prefix_audio, 
+                speed, top_p, top_k, temperature, repetition_penalty, uuid_number],
+                 outputs=[output_audio, uuid_number])
 
-
-
+        gr.Button(visible=False).click(fn=generate_audio,
+            inputs=[model_choice, text, language, speaker_audio, prefix_audio, emotion1, emotion2, emotion3, emotion4, emotion5, emotion6, emotion7, emotion8,
+                  vq_single, fmax, pitch_std, dnsmos_ovrl, speaker_noised, cfg_scale, top_p,
+                  min_k, min_p, linear, confidence, quadratic, speed_input, randomize_seed, unconditional_keys],
+                  outputs=[output_audio, uuid_number])
+        gr.api(fn=generate_audio, api_name="generate_audio")
     return demo
 
 
@@ -361,10 +315,35 @@ def build_interface():
 # =============================================================================
 
 if __name__ == "__main__":
-    CURRENT_MODEL = load_model(use_cpu=args.use_cpu)
+    # Initialize application environment
+    initialize_application_environment("XTTS Text-to-Speech Application with Gradio Interface")
+    
+    # Load model with standardized initialization
+    CURRENT_MODEL = initialize_model_with_cache(use_cpu=args.use_cpu)
 
-    init_latent_cache(model=CURRENT_MODEL, supported_languages=SUPPORTED_LANGUAGE_CODES)
-    wav, _ = generate_audio(text="This is a test.", speaker_audio="malebrute", language="en")
+    # Test audio generation
+    #Warmup
+
+    #wav, _ = generate_audio(text="warmup", speaker_audio="malebrute", language="en")
+    #wav, _ = generate_audio(text="warmup", speaker_audio="malebrute", language="en", stream=True)
+#
+    #test_text = "Now let's make my mum's favourite. So three mars bars into the pan. Then we add the tuna and just stir for a bit, just let the chocolate and fish infuse. A sprinkle of olive oil and some tomato ketchup. Now smell that. Oh boy this is going to be incredible."
+    #stream_test_times = []
+    #nonstream_test_times = []
+    #for i in range(6):
+    #    stream_start = time.perf_counter()
+    #    wav, _ = generate_audio(text=test_text, speaker_audio="malebrute", language="en", stream=True)
+    #    stream_test_times.append(time.perf_counter() - stream_start)
+#
+    #    non_stream_start = time.perf_counter()
+    #    wav, _ = generate_audio(text=test_text, speaker_audio="malebrute", language="en", stream=False)
+    #    nonstream_test_times.append(time.perf_counter() - non_stream_start)
+#
+#
+#
+    #stream_avg = sum(stream_test_times) / len(stream_test_times)
+    #nonstream_avg = sum(nonstream_test_times) / len(nonstream_test_times)
+    #logger.info(f"Tested audio generation {i} times- streaming avg: {stream_avg}, non-streaming avg: {nonstream_avg}")
 
     demo = build_interface()
-    demo.launch(server_name=args.server, server_port=args.port, share=args.share, inbrowser=args.inbrowser)
+    demo.launch(server_name=args.server, server_port=args.port, share=args.share, inbrowser=args.inbrowser, debug=True, show_api=True)
