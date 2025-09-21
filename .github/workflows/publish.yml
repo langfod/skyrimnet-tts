@@ -69,6 +69,7 @@ jobs:
           Copy-Item -Path "speakers" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
           Copy-Item -Path "assets" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
           Copy-Item -Path "skyrimnet_config.txt" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse  
+          Copy-Item -Path "examples\2_Start_XTTS.bat" -Destination "archive\$env:PACKAGE_NAME\" -Force -Recurse
         shell: pwsh
 
       # Archive dist directory with version tag
