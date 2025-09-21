@@ -66,7 +66,7 @@ except Exception as e:
     print(f"Warning: Core spaCy data collection failed: {e}")
 
 
-print(f"Total spaCy data files added: {len([d for d in datas if 'spacy' in d[1]])}")
+#print(f"Total spaCy data files added: {len([d for d in datas if 'spacy' in d[1]])}")
 
 # Include setuptools data files (needed for jaraco.text and other components)
 datas += collect_data_files("setuptools", excludes=[
@@ -165,6 +165,13 @@ datas += collect_data_files("torch", excludes=[
 ])
 
 datas += collect_data_files("torchaudio", excludes=[
+    "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
+    "test*", "*test*", "tests/*", "*/tests/*",
+    "example*", "*example*", "examples/*", "*/examples/*",
+    "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*"
+])
+
+datas += collect_data_files("spacy", excludes=[
     "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
     "test*", "*test*", "tests/*", "*/tests/*",
     "example*", "*example*", "examples/*", "*/examples/*",

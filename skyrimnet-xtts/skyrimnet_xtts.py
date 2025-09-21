@@ -246,7 +246,7 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
         logger.warning(f"Text length {len(text)} exceeds limit {char_limit} for language '{language}'. Enabling text splitting.")
     
     if speaker_audio is None or speaker_audio.strip() == "":
-        speaker_audio = "malebrute.wav"
+        speaker_audio = "malebrute"
 
     gpt_cond_latent, speaker_embedding = get_latent_from_audio(CURRENT_MODEL, language, speaker_audio, speaker_audio_uuid)
     
@@ -301,7 +301,7 @@ def build_interface():
                 language = gr.Dropdown(choices=SUPPORTED_LANGUAGE_CODES, value="en", label="Language Code", allow_custom_value=True)
 
             with gr.Column():
-                speaker_audio = gr.Audio(label="Optional Speaker Audio (for cloning)", type="filepath",sources=["upload", "microphone"], value="assets/malebrute.wav")
+                speaker_audio = gr.Audio(label="Optional Speaker Audio (for cloning)", type="filepath",sources=["upload", "microphone"])
                 enable_text_splitting = gr.Checkbox(value=True, label="Enable Text Splitting")
 
         with gr.Row():
@@ -364,7 +364,7 @@ if __name__ == "__main__":
     CURRENT_MODEL = load_model(use_cpu=args.use_cpu)
 
     init_latent_cache(model=CURRENT_MODEL, supported_languages=SUPPORTED_LANGUAGE_CODES)
-    wav, _ = generate_audio(text="This is a test.", speaker_audio="assets/malebrute.wav", language="en")
+    wav, _ = generate_audio(text="This is a test.", speaker_audio="malebrute", language="en")
 
     demo = build_interface()
     demo.launch(server_name=args.server, server_port=args.port, share=args.share, inbrowser=args.inbrowser)
