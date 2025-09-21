@@ -35,7 +35,6 @@ CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
 SPEAKER_EMBEDDING = None
 SPEAKER_AUDIO_PATH = None
-SPEAKER_AUDIO_PATH_DICT = {}
 
 # Cache flags - defaults that can be overridden by skyrimnet_config.txt
 ENABLE_DISK_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_DISK_CACHE"]
@@ -235,7 +234,7 @@ def generate_audio(model_choice=None, text=None, language="en", speaker_audio=No
     #seed = int(seed)
 
     # Handle speaker audio caching
-    global SPEAKER_AUDIO_PATH, SPEAKER_AUDIO_PATH_DICT, SPEAKER_EMBEDDING
+    global SPEAKER_AUDIO_PATH, SPEAKER_EMBEDDING
 
     speaker_audio_uuid = seed
 

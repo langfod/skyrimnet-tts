@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -29,7 +29,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install uv
-          uv install -r requirements.txt
+          uv pip install -r requirements.txt
           pip install pyinstaller
         shell: pwsh
 
@@ -87,12 +87,13 @@ jobs:
 
       # Upload artifact with version tag
       - name: Upload artifact
+        if: ${{ github.event_name == 'release' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           $archiveName = "$env:PACKAGE_NAME"
           if ($env:VERSION_TAG) {
-            $archiveName = "$env:PACKAGE_NAME`_$env:VERSION_TAG"
+            $archiveName = "$env:PACKAGE_NAME" + "_" + "$env:VERSION_TAG"
           }
           gh release upload ${{github.event.release.tag_name}} "./archive/$archiveName.zip"
         shell: pwsh

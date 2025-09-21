@@ -123,7 +123,7 @@ if ($pythonArgs) {
 }
 
 # Build the command to run inside the new PowerShell instance. Escape $Host so it's evaluated by the child PowerShell.
-$psCommand = "`$Host.UI.RawUI.WindowTitle = 'SkyrimNet XTTS'; $vsInitCommand & '$pythonPath' -m skyrimnet-xtts $pythonArgs"
+$psCommand = "`$Host.UI.RawUI.WindowTitle = 'SkyrimNet XTTS'; & '$pythonPath' -m skyrimnet-xtts $pythonArgs"
 
 # Launch PowerShell in a new window and keep it open (-NoExit) so errors remain visible.
 $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoExit','-Command',$psCommand) -WorkingDirectory $scriptRoot -PassThru

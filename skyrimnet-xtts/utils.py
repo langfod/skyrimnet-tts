@@ -74,13 +74,13 @@ def get_speakers_dir(language: str = "en") -> Path:
     return speakers_dir
 
 @functools.cache
-def get_cache_key(audio_path, uuid: int = None) -> Optional[str]:
+def get_cache_key(audio_path, uuid: int | None = None) -> Optional[str]:
     """Generate a cache key based on audio file, UUID"""
     if audio_path is None:
         return None
 
     cache_prefix = Path(audio_path).stem
-    if uuid:
+    if uuid is not None:
         # Convert UUID to hex string for readability
         try:
             uuid_hex = hex(uuid)[2:]  # Remove '0x' prefix
@@ -175,16 +175,17 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
         return gpt_cond_latent, speaker_embedding
     
     # This really should not happen, but just in case
-    return None
+    return None, None
 
 def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
     """Initialize latent cache from disk for all supported languages."""
     cached_latents = {}
     for lang in supported_languages:
         latent_dir = get_latent_dir(language=lang)
+        cached_latents[lang] = []  # Initialize as empty list for each language
         for filename in latent_dir.glob("*.pt"):
             try:
-                cached_latents[lang] = filename.stem
+                cached_latents[lang].append(filename.stem)
                 latents = load_pt_latents(filename, model.device)
                 #logger.info(f"Loaded latent shapes: gpt_cond_latent={latents['gpt_cond_latent'].shape}, speaker_embedding={latents['speaker_embedding'].shape}")
                 cache_manager.set(lang, filename.stem, latents)
@@ -199,7 +200,7 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
                 latents = {"gpt_cond_latent": gpt_cond_latent, "speaker_embedding": speaker_embedding}
                 cache_manager.set(lang, speaker_wav_wav.stem, latents)
             except Exception as e:
-                logger.error(f"Failed to load latents from speaker{speaker_wav_wav}: {e}")
+                logger.error(f"Failed to load latents from speaker {speaker_wav_wav}: {e}")
 
     stats = cache_manager.get_stats()
     logger.info(
