@@ -20,23 +20,21 @@ from gradio.routes import mount_gradio_app
 # Import shared modules - Handle both direct execution and module execution
 try:
     # Try relative imports first (for module execution: python -m skyrimnet-xtts)
-    from .shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES
-    from .shared_models import load_model, setup_model_seed, validate_model_state
+    from .shared_config import SUPPORTED_LANGUAGE_CODES
     from .shared_args import parse_api_args
     from .shared_app_utils import setup_application_logging, initialize_application_environment
     from .shared_models import initialize_model_with_cache
-    from .shared_cache_utils import init_latent_cache, get_wavout_dir, get_latent_dir, get_speakers_dir
+    from .shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
 
     from . import skyrimnet_api
     from . import skyrimnet_xtts as skyrimnet_gradio
 except ImportError:
     # Fall back to absolute imports (for direct execution or PyInstaller)
-    from shared_config import setup_environment, SUPPORTED_LANGUAGE_CODES
-    from shared_models import load_model, setup_model_seed, validate_model_state
+    from shared_config import SUPPORTED_LANGUAGE_CODES
     from shared_args import parse_api_args
     from shared_app_utils import setup_application_logging, initialize_application_environment
     from shared_models import initialize_model_with_cache
-    from shared_cache_utils import init_latent_cache, get_wavout_dir, get_latent_dir, get_speakers_dir
+    from shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
 
     import skyrimnet_api
     import skyrimnet_xtts as skyrimnet_gradio

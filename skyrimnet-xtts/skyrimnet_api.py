@@ -127,7 +127,7 @@ async def log_requests(request: Request, call_next):
             if "application/json" in content_type:
                 # For JSON requests, we can log the body
                 body = await request.body()
-                if len(body) < 1000:  # Only log small bodies
+                if len(body) < 2000:  # Only log small bodies
                     logger.info(f"   Body: {body.decode('utf-8')}")
                 else:
                     logger.info(f"   Body: <large body {len(body)} bytes>")

@@ -128,7 +128,7 @@ def generate_audio(model_choice:str=None, text:str=None, language:str="en", spea
     Generates audio based on the provided UI parameters with enhanced caching.
     """
     global IGNORE_PING
-
+    #print(locals())
     language = validate_language(language)
     if isinstance(speaker_audio, dict) and 'path' in speaker_audio:
         speaker_audio = speaker_audio['path']
@@ -296,16 +296,22 @@ def build_interface():
         temperature_input = gr.Number(visible=False)
         repetition_penalty_input = gr.Number(visible=False)
 
+        # Web UI button - uses visible sliders with generate_gradio_audio
         generate_button.click(fn=generate_gradio_audio,
             inputs=[model_choice, text, language, speaker_audio, prefix_audio, 
                 speed, top_p, top_k, temperature, repetition_penalty, uuid_number],
                  outputs=[output_audio, uuid_number])
-
-        gr.Button(visible=False).click(fn=generate_audio,
+        
+        # API-only button - uses hidden Number components with generate_audio
+        # This is the endpoint that external API calls should use
+        api_button = gr.Button(visible=False)
+        api_button.click(fn=generate_audio,
             inputs=[model_choice, text, language, speaker_audio, prefix_audio, emotion1, emotion2, emotion3, emotion4, emotion5, emotion6, emotion7, emotion8,
-                  vq_single, fmax, pitch_std, dnsmos_ovrl, speaker_noised, cfg_scale, top_p,
-                  min_k, min_p, linear, confidence, quadratic, speed_input, randomize_seed, unconditional_keys],
+                  vq_single, fmax, pitch_std, speaking_rate, dnsmos_ovrl, speaker_noised, cfg_scale, top_p,
+                  min_k, min_p, linear, confidence, quadratic, uuid_number, randomize_seed, unconditional_keys],
                   outputs=[output_audio, uuid_number])
+        
+        # Expose only the API function for external calls
         gr.api(fn=generate_audio, api_name="generate_audio")
     return demo
 
