@@ -6,6 +6,7 @@ from datetime import datetime
 import torchaudio
 import os
 import warnings
+import json
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Any, List
 from loguru import logger
@@ -108,6 +109,54 @@ def load_pt_latents(path, device):
     return latents
 
 
+def load_json_latents(path, device):
+    """Load and convert legacy JSON latents to proper tensor format."""
+    expected_shapes = {
+        "gpt_cond_latent": torch.Size([1, 32, 1024]),
+        "speaker_embedding": torch.Size([1, 512, 1]),
+    }
+    
+    try:
+        with open(path, 'r') as f:
+            json_data = json.load(f)
+        
+        # Convert lists back to tensors with proper shapes based on xtts-api-server format
+        gpt_cond_latent = torch.tensor(json_data["gpt_cond_latent"], dtype=torch.float32).to(device)
+        speaker_embedding = torch.tensor(json_data["speaker_embedding"], dtype=torch.float32).to(device)
+        
+        # Check if we need reshaping (if loaded from flattened lists)
+        if gpt_cond_latent.dim() == 2:  # Flattened format [32, 1024]
+            gpt_cond_latent = gpt_cond_latent.unsqueeze(0)  # Add batch dimension [1, 32, 1024]
+        elif gpt_cond_latent.dim() == 1:  # Completely flattened format
+            gpt_cond_latent = gpt_cond_latent.reshape((-1, 1024)).unsqueeze(0)
+            
+        if speaker_embedding.dim() == 2:  # Flattened format [512, 1] or [1, 512]
+            if speaker_embedding.shape[0] == 1:  # [1, 512] 
+                speaker_embedding = speaker_embedding.unsqueeze(-1)  # [1, 512, 1]
+            elif speaker_embedding.shape[1] == 1:  # [512, 1]
+                speaker_embedding = speaker_embedding.unsqueeze(0)  # [1, 512, 1]
+        elif speaker_embedding.dim() == 1:  # Completely flattened [512]
+            speaker_embedding = speaker_embedding.unsqueeze(0).unsqueeze(-1)  # [1, 512, 1]
+        
+        latents = {
+            "gpt_cond_latent": gpt_cond_latent,
+            "speaker_embedding": speaker_embedding
+        }
+        
+        # Validate shapes
+        for key, expected_shape in expected_shapes.items():
+            actual_shape = latents[key].shape
+            if actual_shape != expected_shape:
+                raise ValueError(
+                    f"{key} shape mismatch: expected {expected_shape}, got {actual_shape}")
+        
+        return latents
+        
+    except (KeyError, json.JSONDecodeError, ValueError) as e:
+        logger.error(f"Failed to load JSON latents from {path}: {e}")
+        raise
+
+
 def _save_pt_to_disk(filename, data):
     try:
         torch.save(data, filename)
@@ -185,6 +234,8 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
     for lang in supported_languages:
         latent_dir = get_latent_dir(language=lang)
         cached_latents[lang] = []  # Initialize as empty list for each language
+        
+        # Load existing .pt files from latents directory
         for filename in latent_dir.glob("*.pt"):
             try:
                 cached_latents[lang].append(filename.stem)
@@ -193,16 +244,54 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
                 cache_manager.set(lang, filename.stem, latents)
             except Exception as e:
                 logger.error(f"Failed to load latents from {filename}: {e}")
+        
         speaker_dir = get_speakers_dir(language=lang)
-        for speaker_wav_wav in speaker_dir.glob("*.wav"):
-            if speaker_wav_wav.stem in cached_latents.get(lang, []):
-                continue # Already cached from .pt file
+        
+        # Get all speaker files and organize by base name
+        speaker_files = {}
+        for file_path in speaker_dir.iterdir():
+            if file_path.is_file() and file_path.suffix in ['.wav', '.json']:
+                base_name = file_path.stem
+                if base_name not in speaker_files:
+                    speaker_files[base_name] = {}
+                speaker_files[base_name][file_path.suffix] = file_path
+        
+        # Process each speaker, preferring .wav over .json
+        for base_name, files in speaker_files.items():
+            if base_name in cached_latents.get(lang, []):
+                continue  # Already cached from .pt file
+            
             try:
-                gpt_cond_latent, speaker_embedding = get_latent_from_audio(model, lang, str(speaker_wav_wav))
-                latents = {"gpt_cond_latent": gpt_cond_latent, "speaker_embedding": speaker_embedding}
-                cache_manager.set(lang, speaker_wav_wav.stem, latents)
+                if '.wav' in files:
+                    # Prefer .wav files - compute latents from audio
+                    speaker_wav_path = files['.wav']
+                    logger.info(f"Processing .wav file: {speaker_wav_path}")
+                    gpt_cond_latent, speaker_embedding = get_latent_from_audio(model, lang, str(speaker_wav_path))
+                    latents = {"gpt_cond_latent": gpt_cond_latent, "speaker_embedding": speaker_embedding}
+                    cache_manager.set(lang, base_name, latents)
+                    
+                elif '.json' in files:
+                    # Use legacy .json files and convert to .pt format
+                    json_path = files['.json']
+                    logger.info(f"Loading legacy JSON latents from: {json_path}")
+                    
+                    # Load JSON latents
+                    latents = load_json_latents(json_path, model.device)
+                    
+                    # Save as .pt file for future use
+                    pt_filename = latent_dir.joinpath(f"{base_name}.pt")
+                    threading.Thread(
+                        target=_save_pt_to_disk,
+                        args=(pt_filename, latents),
+                        daemon=True
+                    ).start()
+                    logger.info(f"Converting JSON latents to .pt format: {pt_filename}")
+                    
+                    # Store in memory cache
+                    cache_manager.set(lang, base_name, latents)
+                    
             except Exception as e:
-                logger.error(f"Failed to load latents from speaker {speaker_wav_wav}: {e}")
+                logger.error(f"Failed to load latents for speaker {base_name}: {e}")
 
     stats = cache_manager.get_stats()
     logger.info(
