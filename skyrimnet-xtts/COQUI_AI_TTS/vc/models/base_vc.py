@@ -303,7 +303,7 @@ class BaseVC(BaseTrainerModel):
             # init dataloader
             dataset = TTSDataset(
                 outputs_per_step=config.r if "r" in config else 1,
-                compute_linear_spec=config.model.lower() == "tacotron" or config.compute_linear_spec,
+                compute_linear_spec=config.compute_linear_spec,
                 compute_f0=config.get("compute_f0", False),
                 f0_cache_path=config.get("f0_cache_path", None),
                 compute_energy=config.get("compute_energy", False),

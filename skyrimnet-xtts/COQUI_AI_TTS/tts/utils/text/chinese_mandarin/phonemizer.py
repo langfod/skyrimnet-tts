@@ -1,5 +1,5 @@
 try:
-    import jieba
+    import spacy_pkuseg as pkuseg
     import pypinyin
 except ImportError as e:
     raise ImportError("Chinese requires: jieba, pypinyin") from e
@@ -21,7 +21,8 @@ def _chinese_pinyin_to_phoneme(pinyin: str) -> str:
 
 
 def chinese_text_to_phonemes(text: str, seperator: str = "|") -> str:
-    tokenized_text = jieba.cut(text, HMM=False)
+    seg = pkuseg.pkuseg()
+    tokenized_text = seg.cut(text)
     tokenized_text = " ".join(tokenized_text)
     pinyined_text: list[str] = _chinese_character_to_pinyin(tokenized_text)
 

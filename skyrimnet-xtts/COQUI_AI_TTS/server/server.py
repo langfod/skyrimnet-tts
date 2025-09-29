@@ -40,7 +40,7 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model_name",
         type=str,
-        default="tts_models/en/ljspeech/tacotron2-DDC",
+        default="tts_models/multilingual/multi-dataset/xtts_v2",
         help="Name of one of the pre-trained tts models in format <language>/<dataset>/<model_name>",
     )
     parser.add_argument("--vocoder_name", type=str, default=None, help="Name of one of the released vocoder models.")

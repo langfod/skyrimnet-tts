@@ -10,10 +10,8 @@ import torch
 from torch import nn
 
 from COQUI_AI_TTS.config import load_config
-from COQUI_AI_TTS.tts.configs.vits_config import VitsConfig
 from COQUI_AI_TTS.tts.models import setup_model as setup_tts_model
 from COQUI_AI_TTS.tts.models.base_tts import BaseTTS
-from COQUI_AI_TTS.tts.models.vits import Vits
 from COQUI_AI_TTS.utils.audio import AudioProcessor
 from COQUI_AI_TTS.utils.audio.numpy_transforms import save_wav
 from COQUI_AI_TTS.utils.generic_utils import optional_to_str
@@ -105,9 +103,7 @@ class Synthesizer(nn.Module):
         if model_dir:
             path = Path(model_dir)
             self.checkpoint_dir = path if path.is_dir() else path.parent
-            if "fairseq" in model_dir:
-                self._load_fairseq_from_dir(model_dir, use_cuda)
-            elif "openvoice" in model_dir:
+            if "openvoice" in model_dir:
                 self._load_openvoice_from_dir(Path(model_dir), use_cuda)
             else:
                 self._load_tts_from_dir(model_dir, use_cuda)
@@ -153,18 +149,7 @@ class Synthesizer(nn.Module):
         if use_cuda:
             self.vc_model.cuda()
 
-    def _load_fairseq_from_dir(self, model_dir: str, use_cuda: bool) -> None:
-        """Load the fairseq model from a directory.
 
-        We assume it is VITS and the model knows how to load itself from the directory and there is a config.json file in the directory.
-        """
-        self.tts_config = VitsConfig()
-        self.tts_model = Vits.init_from_config(self.tts_config)
-        self.tts_model.load_fairseq_checkpoint(self.tts_config, checkpoint_dir=model_dir, eval=True)
-        self.tts_config = self.tts_model.config
-        self.output_sample_rate = self.tts_config.audio["sample_rate"]
-        if use_cuda:
-            self.tts_model.cuda()
 
     def _load_openvoice_from_dir(self, checkpoint: Path, use_cuda: bool) -> None:
         """Load the OpenVoice model from a directory.

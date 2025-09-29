@@ -1,8 +1,6 @@
 def inv_spectrogram(postnet_output, ap, CONFIG):
-    if CONFIG.model.lower() in ["tacotron"]:
-        wav = ap.inv_spectrogram(postnet_output.T)
-    else:
-        wav = ap.inv_melspectrogram(postnet_output.T)
+    # Tacotron removed - using mel spectrogram inversion for all models
+    wav = ap.inv_melspectrogram(postnet_output.T)
     return wav
 
 

@@ -28,7 +28,6 @@ def setup_environment():
     import warnings
     warnings.filterwarnings("ignore", module='Setuptools.*', append=True)
     warnings.filterwarnings("ignore", module='numbpysbd.*', append=True)
-    warnings.filterwarnings("ignore", module='jieba.*', append=True)
     warnings.filterwarnings("ignore", module='jamo.*', append=True)
     warnings.filterwarnings("ignore", module='g2pkk.*', append=True)
 
