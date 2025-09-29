@@ -8,16 +8,20 @@ import torch
 from loguru import logger
 from typing import Optional, Any
 
-# TTS imports
-from TTS.utils.manage import ModelManager
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import Xtts
+# Local imports - Use absolute imports from the package
+import os
+import sys
 
-# Local imports for cache initialization - Handle both direct and module execution
-try:
-    from .shared_config import SUPPORTED_LANGUAGE_CODES
-except ImportError:
-    from shared_config import SUPPORTED_LANGUAGE_CODES
+# Add current package directory to Python path if needed
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# TTS imports - Now these will work consistently
+from COQUI_AI_TTS.utils.manage import ModelManager
+from COQUI_AI_TTS.tts.configs.xtts_config import XttsConfig
+from COQUI_AI_TTS.tts.models.xtts import Xtts
+from shared_config import SUPPORTED_LANGUAGE_CODES
 
 
 # =============================================================================
@@ -227,10 +231,7 @@ def initialize_model_with_cache(
             validate_model_state(model)
         
         # Initialize latent cache import here to avoid circular imports
-        try:
-            from .shared_cache_utils import init_latent_cache  
-        except ImportError:
-            from shared_cache_utils import init_latent_cache
+        from shared_cache_utils import init_latent_cache
         init_latent_cache(model=model, supported_languages=SUPPORTED_LANGUAGE_CODES)
         
         return model

@@ -12,6 +12,32 @@ from typing import Dict, Optional, Tuple, Any, List
 from loguru import logger
 
 
+def get_model_device(model):
+    """Safely get the device from a model, handling different model types."""
+    # Cache the device on the model object to avoid repeated parameter iteration
+    if hasattr(model, '_cached_device'):
+        return model._cached_device
+    
+    try:
+        # Try the device property first (works with our BaseTTS models)
+        if hasattr(model, 'device'):
+            device = model.device
+        else:
+            # Fall back to getting device from parameters (only once!)
+            device = next(model.parameters()).device
+        
+        # Cache the result for future calls
+        model._cached_device = device
+        return device
+        
+    except Exception:
+        # Final fallback to CPU
+        logger.warning("Could not determine model device, falling back to CPU")
+        device = torch.device('cpu')
+        model._cached_device = device
+        return device
+
+
 class LatentCacheManager:
     """in-memory cache manager for latent embeddings."""
 
@@ -184,7 +210,7 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
     latent_filename = latent_dir.joinpath(f"{cache_file_key}.pt")
     if latent_filename.is_file():
         logger.info(f"Loading cached latents from {latent_filename}")
-        latents = load_pt_latents(latent_filename, model.device)
+        latents = load_pt_latents(latent_filename, get_model_device(model))
         # Store in memory cache for future use
         if latents:
             cache_manager.set(language, cache_file_key, latents)
@@ -239,7 +265,7 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
         for filename in latent_dir.glob("*.pt"):
             try:
                 cached_latents[lang].append(filename.stem)
-                latents = load_pt_latents(filename, model.device)
+                latents = load_pt_latents(filename, get_model_device(model))
                 #logger.info(f"Loaded latent shapes: gpt_cond_latent={latents['gpt_cond_latent'].shape}, speaker_embedding={latents['speaker_embedding'].shape}")
                 cache_manager.set(lang, filename.stem, latents)
             except Exception as e:
@@ -276,7 +302,7 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
                     logger.info(f"Loading legacy JSON latents from: {json_path}")
                     
                     # Load JSON latents
-                    latents = load_json_latents(json_path, model.device)
+                    latents = load_json_latents(json_path, get_model_device(model))
                     
                     # Save as .pt file for future use
                     pt_filename = latent_dir.joinpath(f"{base_name}.pt")

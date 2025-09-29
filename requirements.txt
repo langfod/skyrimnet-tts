@@ -12,5 +12,29 @@ pydantic
 loguru
 uvicorn
 transformers<4.56.0 #until coqui-tts updates to support it
-coqui-tts[languages]
+# coqui-tts[languages]  # EXTRACTED TO LOCAL COQUI_AI_TTS DIRECTORY - INFERENCE ONLY
+# coqui_tts_trainer         # REMOVED - Not needed for inference-only deployment
 gradio
+
+
+## Section added for TTS inclusion project.
+##
+pysbd                      # Sentence boundary detection (multilingual)
+pypinyin
+jieba                       # Chinese text segmentation
+zh_num2words               # Chinese number to words conversion
+jamo                       # Korean character processing
+g2pkk                      # Korean grapheme-to-phoneme conversion
+pydub                      # Audio format conversion and manipulation
+
+librosa                      # Audio analysis and manipulation
+soundfile                   # Audio file I/O
+scipy                       # Scientific computing (signal processing)
+
+coqpit                      # Configuration management
+fsspec                      # File system abstraction
+tqdm                        # Progress bars
+
+anyascii                    # Unicode to ASCII conversion (used by TTS text cleaners)
+gruut                       # Multilingual phonemizer (replaces coqui-tts phonemization)
+gruut-ipa                   # IPA phoneme manipulation (required by gruut)
