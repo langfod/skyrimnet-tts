@@ -10,12 +10,6 @@ logger = logging.getLogger(__name__)
 
 def setup_model(config: BaseVCConfig) -> BaseVC:
     logger.info("Using model: %s", config.model)
-    # fetch the right model implementation.
-    if config["model"].lower() == "freevc":
-        MyModel = importlib.import_module("COQUI_AI_TTS.vc.models.freevc").FreeVC
-    elif config["model"].lower() == "knnvc":
-        MyModel = importlib.import_module("COQUI_AI_TTS.vc.models.knnvc").KNNVC
-    else:
-        msg = f"Model {config.model} does not exist!"
-        raise ValueError(msg)
-    return MyModel.init_from_config(config)
+    # No voice conversion models are supported in this minimal XTTS build
+    msg = f"Voice conversion model {config.model} is not supported in this build!"
+    raise ValueError(msg)

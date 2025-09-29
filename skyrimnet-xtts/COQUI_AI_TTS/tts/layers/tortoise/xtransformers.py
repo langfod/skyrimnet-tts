@@ -4,8 +4,22 @@ from functools import partial
 
 import torch
 import torch.nn.functional as F
-from einops import rearrange, repeat
 from torch import einsum, nn
+
+# Conditional import for einops
+try:
+    from einops import rearrange, repeat
+    EINOPS_AVAILABLE = True
+except ImportError:
+    EINOPS_AVAILABLE = False
+    # Simple fallback implementations for basic rearrange/repeat operations
+    def rearrange(x, pattern, **kwargs):
+        # Basic fallback - this would need more sophisticated implementation for full compatibility
+        raise ImportError("einops not available and this rearrange pattern is not supported in fallback")
+    
+    def repeat(x, pattern, **kwargs):
+        # Basic fallback - this would need more sophisticated implementation for full compatibility  
+        raise ImportError("einops not available and this repeat pattern is not supported in fallback")
 
 from COQUI_AI_TTS.tts.layers.tortoise.transformer import cast_tuple, max_neg_value
 from COQUI_AI_TTS.utils.generic_utils import default, exists

@@ -38,7 +38,7 @@ def get_user_data_dir(app_name: str) -> Path:
     return base_dir.joinpath(app_name)
 
 from COQUI_AI_TTS.config import load_config, read_json_with_comments
-from COQUI_AI_TTS.vc.configs.knnvc_config import KNNVCConfig
+# KNNVCConfig removed - voice conversion not supported in this build
 
 logger = logging.getLogger(__name__)
 
@@ -463,8 +463,8 @@ class ModelManager:
         else:
             output_config_path = output_model_path / "config.json"
         if model == "knnvc" and not output_config_path.exists():
-            knnvc_config = KNNVCConfig()
-            knnvc_config.save_json(output_config_path)
+            # KNNVC not supported in this build - skip config creation
+            pass
         # update paths in the config.json
         self._update_paths(output_path, output_config_path)
         return output_model_path, output_config_path, model_item

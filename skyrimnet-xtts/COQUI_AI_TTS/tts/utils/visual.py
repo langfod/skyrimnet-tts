@@ -1,11 +1,19 @@
 import librosa
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from matplotlib.colors import LogNorm
 
-matplotlib.use("Agg")
+# Conditional matplotlib imports
+try:
+    import matplotlib
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LogNorm
+    matplotlib.use("Agg")
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    matplotlib = None
+    plt = None
+    LogNorm = None
 
 
 def plot_alignment(alignment, info=None, fig_size=(16, 10), title=None, output_fig=False, plot_log=False):
@@ -34,6 +42,9 @@ def plot_alignment(alignment, info=None, fig_size=(16, 10), title=None, output_f
 
 
 def plot_spectrogram(spectrogram, ap=None, fig_size=(16, 10), output_fig=False):
+    if not MATPLOTLIB_AVAILABLE:
+        return None  # Return None when matplotlib is not available
+        
     if isinstance(spectrogram, torch.Tensor):
         spectrogram_ = spectrogram.detach().cpu().numpy().squeeze().T
     else:

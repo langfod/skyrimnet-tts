@@ -2,9 +2,12 @@ import logging
 
 import numpy as np
 import torch
-from matplotlib import pyplot as plt
 
-from COQUI_AI_TTS.tts.utils.visual import plot_spectrogram
+# Visual utilities not needed for core functionality - defining stubs
+MATPLOTLIB_AVAILABLE = False
+VISUAL_UTILS_AVAILABLE = False
+plt = None
+plot_spectrogram = None
 from COQUI_AI_TTS.utils.audio import AudioProcessor
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,10 @@ def plot_results(y_hat: torch.tensor, y: torch.tensor, ap: AudioProcessor, name_
     Returns:
         Dict: output figures keyed by the name of the figures.
     """
+    if not MATPLOTLIB_AVAILABLE or not VISUAL_UTILS_AVAILABLE:
+        logger.warning("Matplotlib or visual utilities not available. Skipping plot generation.")
+        return {}
+        
     if name_prefix is None:
         name_prefix = ""
 

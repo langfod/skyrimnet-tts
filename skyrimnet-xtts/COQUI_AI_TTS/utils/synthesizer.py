@@ -15,10 +15,8 @@ from COQUI_AI_TTS.tts.models.base_tts import BaseTTS
 from COQUI_AI_TTS.utils.audio import AudioProcessor
 from COQUI_AI_TTS.utils.audio.numpy_transforms import save_wav
 from COQUI_AI_TTS.utils.generic_utils import optional_to_str
-from COQUI_AI_TTS.vc.configs.openvoice_config import OpenVoiceConfig
 from COQUI_AI_TTS.vc.models import setup_model as setup_vc_model
 from COQUI_AI_TTS.vc.models.base_vc import BaseVC
-from COQUI_AI_TTS.vc.models.openvoice import OpenVoice
 from COQUI_AI_TTS.vocoder.models import setup_model as setup_vocoder_model
 from COQUI_AI_TTS.vocoder.models.base_vocoder import BaseVocoder
 from COQUI_AI_TTS.vocoder.utils.generic_utils import interpolate_vocoder_input
@@ -103,10 +101,7 @@ class Synthesizer(nn.Module):
         if model_dir:
             path = Path(model_dir)
             self.checkpoint_dir = path if path.is_dir() else path.parent
-            if "openvoice" in model_dir:
-                self._load_openvoice_from_dir(Path(model_dir), use_cuda)
-            else:
-                self._load_tts_from_dir(model_dir, use_cuda)
+            self._load_tts_from_dir(model_dir, use_cuda)
 
         if self.checkpoint_dir is None:
             msg = "Need to initialize a TTS or VC model via tts_checkpoint/vc_checkpoint/model_dir"
@@ -151,19 +146,7 @@ class Synthesizer(nn.Module):
 
 
 
-    def _load_openvoice_from_dir(self, checkpoint: Path, use_cuda: bool) -> None:
-        """Load the OpenVoice model from a directory.
 
-        We assume the model knows how to load itself from the directory and
-        there is a config.json file in the directory.
-        """
-        self.vc_config = OpenVoiceConfig()
-        self.vc_model = OpenVoice.init_from_config(self.vc_config)
-        self.vc_model.load_checkpoint(self.vc_config, checkpoint, eval=True)
-        self.vc_config = self.vc_model.config
-        self.output_sample_rate = self.vc_config.audio["output_sample_rate"]
-        if use_cuda:
-            self.vc_model.cuda()
 
     def _load_tts_from_dir(self, model_dir: str, use_cuda: bool) -> None:
         """Load the TTS model from a directory.

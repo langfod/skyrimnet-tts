@@ -10,7 +10,9 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from COQUI_AI_TTS.tts.utils.visual import plot_spectrogram
+# Visual utilities not needed for core functionality - defining stub
+def plot_spectrogram(*args, **kwargs):
+    return None
 from COQUI_AI_TTS.utils.audio import AudioProcessor
 from COQUI_AI_TTS.utils.audio.numpy_transforms import mulaw_decode
 from COQUI_AI_TTS.vocoder.datasets.wavernn_dataset import WaveRNNDataset

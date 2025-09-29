@@ -20,7 +20,12 @@ from COQUI_AI_TTS.tts.utils.data import get_length_balancer_weights
 from COQUI_AI_TTS.tts.utils.languages import LanguageManager, get_language_balancer_weights
 from COQUI_AI_TTS.tts.utils.speakers import SpeakerManager, get_speaker_balancer_weights
 from COQUI_AI_TTS.tts.utils.synthesis import inv_spectrogram
-from COQUI_AI_TTS.tts.utils.visual import plot_alignment, plot_spectrogram
+# Visual utilities not needed for core TTS functionality - defining stubs
+def plot_alignment(*args, **kwargs):
+    return None
+
+def plot_spectrogram(*args, **kwargs):
+    return None
 from COQUI_AI_TTS.utils.generic_utils import warn_synthesize_config_deprecated, warn_synthesize_speaker_id_deprecated
 from COQUI_AI_TTS.utils.voices import CloningMixin
 
