@@ -3,11 +3,13 @@ import os
 from io import BytesIO
 from typing import Any
 
-import librosa
 import numpy as np
 import scipy
 import soundfile as sf
-from librosa import magphase, pyin
+import torch
+import torchaudio
+import torchaudio.functional as taF
+#from librosa import magphase, pyin
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ def build_mel_basis(
     mel_fmax: int | None = None,
     **kwargs,
 ) -> np.ndarray:
-    """Build melspectrogram basis.
+    """Build melspectrogram basis using torchaudio (replaces librosa.filters.mel).
 
     Returns:
         np.ndarray: melspectrogram basis.
@@ -32,7 +34,20 @@ def build_mel_basis(
     if mel_fmax is not None:
         assert mel_fmax <= sample_rate // 2
         assert mel_fmax - mel_fmin > 0
-    return librosa.filters.mel(sr=sample_rate, n_fft=fft_size, n_mels=num_mels, fmin=mel_fmin, fmax=mel_fmax)
+    
+    # Use torchaudio instead of librosa for mel filter generation
+    n_freqs = fft_size // 2 + 1
+    mel_filters = taF.melscale_fbanks(
+        n_freqs=n_freqs,
+        f_min=float(mel_fmin),
+        f_max=float(mel_fmax) if mel_fmax is not None else float(sample_rate // 2),
+        n_mels=int(num_mels),
+        sample_rate=int(sample_rate),
+        norm="slaney",
+        mel_scale="slaney",
+    ).T  # Transpose to match librosa format [n_mels, n_freqs]
+    
+    return mel_filters.numpy()
 
 
 def millisec_to_length(*, frame_length_ms: float, frame_shift_ms: float, sample_rate: int, **kwargs) -> tuple[int, int]:
@@ -184,22 +199,39 @@ def stft(
     center: bool = True,
     **kwargs,
 ) -> np.ndarray:
-    """Librosa STFT wrapper.
-
-    Check http://librosa.org/doc/main/generated/librosa.stft.html argument details.
+    """PyTorch STFT implementation (replaces librosa.stft).
 
     Returns:
         np.ndarray: Complex number array.
     """
-    return librosa.stft(
-        y=y,
+    # Convert to torch tensor
+    y_torch = torch.from_numpy(y).float()
+    
+    # Create window
+    if win_length is None:
+        win_length = fft_size
+    if window == "hann":
+        window_tensor = torch.hann_window(win_length)
+    else:
+        # Default to hann if other windows not supported
+        window_tensor = torch.hann_window(win_length)
+    
+    # Perform STFT
+    stft_result = torch.stft(
+        y_torch,
         n_fft=fft_size,
         hop_length=hop_length,
         win_length=win_length,
-        pad_mode=pad_mode,
-        window=window,
+        window=window_tensor,
         center=center,
+        pad_mode=pad_mode,
+        normalized=False,
+        onesided=True,
+        return_complex=True,
     )
+    
+    # Convert back to numpy
+    return stft_result.numpy()
 
 
 def istft(
@@ -211,14 +243,41 @@ def istft(
     center: bool = True,
     **kwargs,
 ) -> np.ndarray:
-    """Librosa iSTFT wrapper.
-
-    Check http://librosa.org/doc/main/generated/librosa.istft.html argument details.
+    """PyTorch iSTFT implementation (replaces librosa.istft).
 
     Returns:
         np.ndarray: Complex number array.
     """
-    return librosa.istft(y, hop_length=hop_length, win_length=win_length, center=center, window=window)
+    # Convert to torch tensor
+    stft_torch = torch.from_numpy(y)
+    
+    # Get n_fft from STFT shape
+    n_fft = (y.shape[-2] - 1) * 2
+    
+    # Create window
+    if win_length is None:
+        win_length = n_fft
+    if window == "hann":
+        window_tensor = torch.hann_window(win_length)
+    else:
+        # Default to hann if other windows not supported
+        window_tensor = torch.hann_window(win_length)
+    
+    # Perform iSTFT
+    result = torch.istft(
+        stft_torch,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        win_length=win_length,
+        window=window_tensor,
+        center=center,
+        normalized=False,
+        onesided=True,
+        return_complex=False,
+    )
+    
+    # Convert back to numpy
+    return result.numpy()
 
 
 def griffin_lim(*, spec: np.ndarray, num_iter=60, **kwargs) -> np.ndarray:
@@ -244,91 +303,91 @@ def compute_stft_paddings(*, x: np.ndarray, hop_length: int, pad_two_sides: bool
         return 0, pad
     return pad // 2, pad // 2 + pad % 2
 
+## Currently not used - remove for XTTS
+##def compute_f0(
+##    *,
+##    x: np.ndarray,
+##    pitch_fmax: float | None = None,
+##    pitch_fmin: float | None = None,
+##    hop_length: int,
+##    win_length: int,
+##    sample_rate: int,
+##    stft_pad_mode: str = "reflect",
+##    center: bool = True,
+##    **kwargs,
+##) -> np.ndarray:
+##    """Compute pitch (f0) of a waveform using the same parameters used for computing melspectrogram.
+##
+##    Args:
+##        x (np.ndarray): Waveform. Shape :math:`[T_wav,]`
+##        pitch_fmax (float): Pitch max value.
+##        pitch_fmin (float): Pitch min value.
+##        hop_length (int): Number of frames between STFT columns.
+##        win_length (int): STFT window length.
+##        sample_rate (int): Audio sampling rate.
+##        stft_pad_mode (str): Padding mode for STFT.
+##        center (bool): Centered padding.
+##
+##    Returns:
+##        np.ndarray: Pitch. Shape :math:`[T_pitch,]`. :math:`T_pitch == T_wav / hop_length`
+##
+##    Examples:
+##        >>> WAV_FILE = filename = librosa.example('vibeace')
+##        >>> from COQUI_AI_TTS.config import BaseAudioConfig
+##        >>> from COQUI_AI_TTS.utils.audio import AudioProcessor
+##        >>> conf = BaseAudioConfig(pitch_fmax=640, pitch_fmin=1)
+##        >>> ap = AudioProcessor(**conf)
+##        >>> wav = ap.load_wav(WAV_FILE, sr=ap.sample_rate)[:5 * ap.sample_rate]
+##        >>> pitch = ap.compute_f0(wav)
+##    """
+##    assert pitch_fmax is not None, " [!] Set `pitch_fmax` before calling `compute_f0`."
+##    assert pitch_fmin is not None, " [!] Set `pitch_fmin` before calling `compute_f0`."
+##
+##    if sample_rate / pitch_fmin >= win_length - 1:
+##        logger.warning("pitch_fmin=%.2f is too small for win_length=%d", pitch_fmin, win_length)
+##        pitch_fmin = sample_rate / (win_length - 1) + 0.1
+##        logger.warning("pitch_fmin increased to %f", pitch_fmin)
+##
+##    f0, voiced_mask, _ = pyin(
+##        y=x.astype(np.double),
+##        fmin=pitch_fmin,
+##        fmax=pitch_fmax,
+##        sr=sample_rate,
+##        frame_length=win_length,
+##        hop_length=hop_length,
+##        pad_mode=stft_pad_mode,
+##        center=center,
+##        n_thresholds=100,
+##        beta_parameters=(2, 18),
+##        boltzmann_parameter=2,
+##        resolution=0.1,
+##        max_transition_rate=35.92,
+##        switch_prob=0.01,
+##        no_trough_prob=0.01,
+##    )
+##    f0[~voiced_mask] = 0.0
+##
+##    return f0
 
-def compute_f0(
-    *,
-    x: np.ndarray,
-    pitch_fmax: float | None = None,
-    pitch_fmin: float | None = None,
-    hop_length: int,
-    win_length: int,
-    sample_rate: int,
-    stft_pad_mode: str = "reflect",
-    center: bool = True,
-    **kwargs,
-) -> np.ndarray:
-    """Compute pitch (f0) of a waveform using the same parameters used for computing melspectrogram.
-
-    Args:
-        x (np.ndarray): Waveform. Shape :math:`[T_wav,]`
-        pitch_fmax (float): Pitch max value.
-        pitch_fmin (float): Pitch min value.
-        hop_length (int): Number of frames between STFT columns.
-        win_length (int): STFT window length.
-        sample_rate (int): Audio sampling rate.
-        stft_pad_mode (str): Padding mode for STFT.
-        center (bool): Centered padding.
-
-    Returns:
-        np.ndarray: Pitch. Shape :math:`[T_pitch,]`. :math:`T_pitch == T_wav / hop_length`
-
-    Examples:
-        >>> WAV_FILE = filename = librosa.example('vibeace')
-        >>> from COQUI_AI_TTS.config import BaseAudioConfig
-        >>> from COQUI_AI_TTS.utils.audio import AudioProcessor
-        >>> conf = BaseAudioConfig(pitch_fmax=640, pitch_fmin=1)
-        >>> ap = AudioProcessor(**conf)
-        >>> wav = ap.load_wav(WAV_FILE, sr=ap.sample_rate)[:5 * ap.sample_rate]
-        >>> pitch = ap.compute_f0(wav)
-    """
-    assert pitch_fmax is not None, " [!] Set `pitch_fmax` before calling `compute_f0`."
-    assert pitch_fmin is not None, " [!] Set `pitch_fmin` before calling `compute_f0`."
-
-    if sample_rate / pitch_fmin >= win_length - 1:
-        logger.warning("pitch_fmin=%.2f is too small for win_length=%d", pitch_fmin, win_length)
-        pitch_fmin = sample_rate / (win_length - 1) + 0.1
-        logger.warning("pitch_fmin increased to %f", pitch_fmin)
-
-    f0, voiced_mask, _ = pyin(
-        y=x.astype(np.double),
-        fmin=pitch_fmin,
-        fmax=pitch_fmax,
-        sr=sample_rate,
-        frame_length=win_length,
-        hop_length=hop_length,
-        pad_mode=stft_pad_mode,
-        center=center,
-        n_thresholds=100,
-        beta_parameters=(2, 18),
-        boltzmann_parameter=2,
-        resolution=0.1,
-        max_transition_rate=35.92,
-        switch_prob=0.01,
-        no_trough_prob=0.01,
-    )
-    f0[~voiced_mask] = 0.0
-
-    return f0
-
-
-def compute_energy(y: np.ndarray, **kwargs) -> np.ndarray:
-    """Compute energy of a waveform using the same parameters used for computing melspectrogram.
-    Args:
-      x (np.ndarray): Waveform. Shape :math:`[T_wav,]`
-    Returns:
-      np.ndarray: energy. Shape :math:`[T_energy,]`. :math:`T_energy == T_wav / hop_length`
-    Examples:
-      >>> WAV_FILE = filename = librosa.example('vibeace')
-      >>> from COQUI_AI_TTS.config import BaseAudioConfig
-      >>> from COQUI_AI_TTS.utils.audio import AudioProcessor
-      >>> conf = BaseAudioConfig()
-      >>> ap = AudioProcessor(**conf)
-      >>> wav = ap.load_wav(WAV_FILE, sr=ap.sample_rate)[:5 * ap.sample_rate]
-      >>> energy = ap.compute_energy(wav)
-    """
-    x = stft(y=y, **kwargs)
-    mag, _ = magphase(x)
-    return np.sqrt(np.sum(mag**2, axis=0))
+## Currently not used - remove for XTTS
+##def compute_energy(y: np.ndarray, **kwargs) -> np.ndarray:
+##    """Compute energy of a waveform using the same parameters used for computing melspectrogram.
+##    Args:
+##      x (np.ndarray): Waveform. Shape :math:`[T_wav,]`
+##    Returns:
+##      np.ndarray: energy. Shape :math:`[T_energy,]`. :math:`T_energy == T_wav / hop_length`
+##    Examples:
+##      >>> WAV_FILE = filename = librosa.example('vibeace')
+##      >>> from COQUI_AI_TTS.config import BaseAudioConfig
+##      >>> from COQUI_AI_TTS.utils.audio import AudioProcessor
+##      >>> conf = BaseAudioConfig()
+##      >>> ap = AudioProcessor(**conf)
+##      >>> wav = ap.load_wav(WAV_FILE, sr=ap.sample_rate)[:5 * ap.sample_rate]
+##      >>> energy = ap.compute_energy(wav)
+##    """
+##    x = stft(y=y, **kwargs)
+##    mag, _ = magphase(x)
+##    return np.sqrt(np.sum(mag**2, axis=0))
 
 
 ### Audio Processing ###
@@ -363,6 +422,27 @@ def find_endpoint(
     return len(wav)
 
 
+def _trim_silence_tensor(wav: np.ndarray, top_db: float, ref: float | None = None) -> np.ndarray:
+    """Tensor-based version of silence trimming without librosa dependency.
+    
+    Args:
+        wav: Input waveform
+        top_db: Threshold in decibels below reference amplitude 
+        ref: Reference amplitude. If None, uses max amplitude of input.
+        
+    Returns:
+        Trimmed waveform
+    """
+    ref_amp = np.max(np.abs(wav)) if ref is None else ref
+    if ref_amp <= 0:
+        return wav
+    thr = ref_amp * (10 ** (-top_db / 20.0))
+    idx = np.where(np.abs(wav) > thr)[0]
+    if idx.size == 0:
+        return wav
+    return wav[idx[0]: idx[-1] + 1]
+
+
 def trim_silence(
     *,
     wav: np.ndarray,
@@ -375,7 +455,7 @@ def trim_silence(
     """Trim silent parts with a threshold and 0.01 sec margin."""
     margin = int(sample_rate * 0.01)
     wav = wav[margin:-margin]
-    return librosa.effects.trim(wav, top_db=trim_db, frame_length=win_length, hop_length=hop_length)[0]
+    return _trim_silence_tensor(wav, top_db=trim_db)
 
 
 def volume_norm(*, x: np.ndarray, coef: float = 0.95, **kwargs) -> np.ndarray:
@@ -427,14 +507,18 @@ def load_wav(
         np.ndarray: Loaded waveform.
     """
     if resample:
-        # loading with resampling. It is significantly slower.
-        x, _ = librosa.load(filename, sr=sample_rate)
+        # loading with resampling using torchaudio
+        x, orig_sr = torchaudio.load(filename)
+        if sample_rate is not None and orig_sr != sample_rate:
+            x = torchaudio.functional.resample(x, orig_sr, sample_rate)
+        x = x.numpy().squeeze()
     else:
-        # SF is faster than librosa for loading files
+        # SF is faster for loading files without resampling
         x, _ = sf.read(filename)
     if x.ndim != 1:
         logger.warning("Found multi-channel audio. Converting to mono: %s", filename)
-        x = librosa.to_mono(x)
+        # Convert to mono by taking mean across channels
+        x = np.mean(x, axis=-1)
     return x
 
 

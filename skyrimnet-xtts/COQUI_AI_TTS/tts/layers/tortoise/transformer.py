@@ -21,12 +21,6 @@ def max_neg_value(t):
     return -torch.finfo(t.dtype).max
 
 
-def stable_softmax(t, dim=-1, alpha=32**2):
-    t = t / alpha
-    t = t - torch.amax(t, dim=dim, keepdim=True).detach()
-    return (t * alpha).softmax(dim=dim)
-
-
 def route_args(router, args, depth):
     routed_args = [(dict(), dict()) for _ in range(depth)]
     matched_keys = [key for key in args.keys() if key in router]
@@ -58,16 +52,6 @@ class SequentialSequence(nn.Module):
             x = x + f(x, **f_args)
             x = x + g(x, **g_args)
         return x
-
-
-class DivideMax(nn.Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x):
-        maxes = x.amax(dim=self.dim, keepdim=True).detach()
-        return x / maxes
 
 
 # https://arxiv.org/abs/2103.17239

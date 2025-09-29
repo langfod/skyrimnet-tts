@@ -7,6 +7,7 @@ setuptools<81
 cupy-cuda12x
 numpy
 psutil
+spacy[cuda12x]
 spacy[ja]
 pydantic
 loguru
@@ -25,7 +26,7 @@ jamo                       # Korean character processing
 #g2pkk                      # Korean grapheme-to-phoneme conversion
 #pydub                      # Audio format conversion and manipulation
 
-librosa                      # Audio analysis and manipulation
+#librosa                      # Audio analysis and manipulation
 soundfile                   # Audio file I/O
 scipy                       # Scientific computing (signal processing)
 
@@ -40,7 +41,7 @@ gruut-ipa                   # IPA phoneme manipulation (required by gruut)
 
 # Multilingual text processing replacement
 spacy-pkuseg                     # Chinese text segmentation alternative
-#kss                           # Korean sentence segmentation
+kss                           # Korean sentence segmentation
 g2pk2                        # Korean grapheme-to-phoneme conversion alternative
 #epitran                      # Multilingual grapheme-to-phoneme conversion alternative
 # For testing 

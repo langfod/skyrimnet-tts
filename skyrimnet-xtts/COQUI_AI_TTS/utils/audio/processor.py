@@ -2,14 +2,14 @@ import logging
 import os
 from typing import Any
 
-import librosa
 import numpy as np
+import torchaudio
 
 from COQUI_AI_TTS.tts.utils.helpers import StandardScaler
 from COQUI_AI_TTS.utils.audio.numpy_transforms import (
     amp_to_db,
     build_mel_basis,
-    compute_f0,
+    #compute_f0,
     db_to_amp,
     deemphasis,
     find_endpoint,
@@ -599,9 +599,10 @@ class AudioProcessor:
         )
 
     def get_duration(self, filename: str) -> float:
-        """Get the duration of a wav file using Librosa.
+        """Get the duration of a wav file using torchaudio.
 
         Args:
             filename (str): Path to the wav file.
         """
-        return librosa.get_duration(filename=filename)
+        metadata = torchaudio.info(filename)
+        return metadata.num_frames / metadata.sample_rate

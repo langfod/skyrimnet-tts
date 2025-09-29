@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torchaudio
 from transformers import LogitsProcessor
 
-from COQUI_AI_TTS.tts.layers.tortoise.xtransformers import ContinuousTransformerWrapper, RelativePositionBias
+from COQUI_AI_TTS.tts.layers.tortoise.xtransformers import RelativePositionBias
 from COQUI_AI_TTS.utils.generic_utils import is_pytorch_at_least_2_4
 
 
@@ -160,136 +160,6 @@ class Upsample(nn.Module):
         if self.use_conv:
             x = self.conv(x)
         return x
-
-
-class Downsample(nn.Module):
-    """
-    A downsampling layer with an optional convolution.
-
-    :param channels: channels in the inputs and outputs.
-    :param use_conv: a bool determining if a convolution is applied.
-    """
-
-    def __init__(self, channels, use_conv, out_channels=None, factor=4, ksize=5, pad=2):
-        super().__init__()
-        self.channels = channels
-        self.out_channels = out_channels or channels
-        self.use_conv = use_conv
-
-        stride = factor
-        if use_conv:
-            self.op = nn.Conv1d(self.channels, self.out_channels, ksize, stride=stride, padding=pad)
-        else:
-            assert self.channels == self.out_channels
-            self.op = nn.AvgPool1d(kernel_size=stride, stride=stride)
-
-    def forward(self, x):
-        assert x.shape[1] == self.channels
-        return self.op(x)
-
-
-DEFAULT_MEL_NORM_FILE = "https://github.com/coqui-ai/TTS/releases/download/v0.14.1_models/mel_norms.pth"
-
-
-class TorchMelSpectrogram(nn.Module):
-    def __init__(
-        self,
-        filter_length=1024,
-        hop_length=256,
-        win_length=1024,
-        n_mel_channels=80,
-        mel_fmin=0,
-        mel_fmax=8000,
-        sampling_rate=22050,
-        normalize=False,
-        mel_norm_file=DEFAULT_MEL_NORM_FILE,
-    ):
-        super().__init__()
-        # These are the default tacotron values for the MEL spectrogram.
-        self.filter_length = filter_length
-        self.hop_length = hop_length
-        self.win_length = win_length
-        self.n_mel_channels = n_mel_channels
-        self.mel_fmin = mel_fmin
-        self.mel_fmax = mel_fmax
-        self.sampling_rate = sampling_rate
-        self.mel_stft = torchaudio.transforms.MelSpectrogram(
-            n_fft=self.filter_length,
-            hop_length=self.hop_length,
-            win_length=self.win_length,
-            power=2,
-            normalized=normalize,
-            sample_rate=self.sampling_rate,
-            f_min=self.mel_fmin,
-            f_max=self.mel_fmax,
-            n_mels=self.n_mel_channels,
-            norm="slaney",
-        )
-        self.mel_norm_file = mel_norm_file
-        if self.mel_norm_file is not None:
-            with fsspec.open(self.mel_norm_file) as f:
-                self.mel_norms = torch.load(f, weights_only=is_pytorch_at_least_2_4())
-        else:
-            self.mel_norms = None
-
-    def forward(self, inp):
-        if (
-            len(inp.shape) == 3
-        ):  # Automatically squeeze out the channels dimension if it is present (assuming mono-audio)
-            inp = inp.squeeze(1)
-        assert len(inp.shape) == 2
-        self.mel_stft = self.mel_stft.to(inp.device)
-        mel = self.mel_stft(inp)
-        # Perform dynamic range compression
-        mel = torch.log(torch.clamp(mel, min=1e-5))
-        if self.mel_norms is not None:
-            self.mel_norms = self.mel_norms.to(mel.device)
-            mel = mel / self.mel_norms.unsqueeze(0).unsqueeze(-1)
-        return mel
-
-
-class CheckpointedLayer(nn.Module):
-    """
-    Wraps a module. When forward() is called, passes kwargs that require_grad through torch.checkpoint() and bypasses
-    checkpoint for all other args.
-    """
-
-    def __init__(self, wrap):
-        super().__init__()
-        self.wrap = wrap
-
-    def forward(self, x, *args, **kwargs):
-        for k, v in kwargs.items():
-            assert not (isinstance(v, torch.Tensor) and v.requires_grad)  # This would screw up checkpointing.
-        partial = functools.partial(self.wrap, **kwargs)
-        return partial(x, *args)
-
-
-class CheckpointedXTransformerEncoder(nn.Module):
-    """
-    Wraps a ContinuousTransformerWrapper and applies CheckpointedLayer to each layer and permutes from channels-mid
-    to channels-last that XTransformer expects.
-    """
-
-    def __init__(self, needs_permute=True, exit_permute=True, checkpoint=True, **xtransformer_kwargs):
-        super().__init__()
-        self.transformer = ContinuousTransformerWrapper(**xtransformer_kwargs)
-        self.needs_permute = needs_permute
-        self.exit_permute = exit_permute
-
-        if not checkpoint:
-            return
-        for i in range(len(self.transformer.attn_layers.layers)):
-            n, b, r = self.transformer.attn_layers.layers[i]
-            self.transformer.attn_layers.layers[i] = nn.ModuleList([n, CheckpointedLayer(b), r])
-
-    def forward(self, x, **kwargs):
-        if self.needs_permute:
-            x = x.permute(0, 2, 1)
-        h = self.transformer(x, **kwargs)
-        if self.exit_permute:
-            h = h.permute(0, 2, 1)
-        return h
 
 
 class TypicalLogitsWarper(LogitsProcessor):

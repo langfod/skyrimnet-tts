@@ -139,22 +139,10 @@ def inference(
     speaker_ids=None,
     d_vectors=None,
 ) -> np.ndarray:
+    # Glow-TTS removed from this build
     if model_name == "glow_tts":
-        speaker_c = None
-        if speaker_ids is not None:
-            speaker_c = speaker_ids
-        elif d_vectors is not None:
-            speaker_c = d_vectors
-        outputs = model.inference_with_MAS(
-            text_input,
-            text_lengths,
-            mel_input,
-            mel_lengths,
-            aux_input={"d_vectors": speaker_c, "speaker_ids": speaker_ids},
-        )
-        model_output = outputs["model_outputs"]
-        return model_output.detach().cpu().numpy()
-
+        raise ValueError("Glow-TTS not supported in this build")
+    # Continue with other model types below
     if "tacotron" in model_name:
         aux_input = {"speaker_ids": speaker_ids, "d_vectors": d_vectors}
         outputs = model(text_input, text_lengths, mel_input, mel_lengths, aux_input)
@@ -282,8 +270,8 @@ def main(arg_list: list[str] | None = None) -> None:
 
     num_params = count_parameters(model)
     print(f"\n > Model has {num_params} parameters", flush=True)
-    # set r
-    r = 1 if config.model.lower() == "glow_tts" else model.decoder.r
+    # set r (Glow-TTS removed from this build)
+    r = model.decoder.r
     own_loader = setup_loader(config, ap, r, speaker_manager, meta_data)
 
     extract_spectrograms(

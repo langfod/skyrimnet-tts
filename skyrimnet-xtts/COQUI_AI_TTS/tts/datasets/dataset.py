@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 
 from COQUI_AI_TTS.tts.utils.data import prepare_data, prepare_stop_target, prepare_tensor
 from COQUI_AI_TTS.utils.audio import AudioProcessor
-from COQUI_AI_TTS.utils.audio.numpy_transforms import compute_energy as calculate_energy
+#from COQUI_AI_TTS.utils.audio.numpy_transforms import compute_energy as calculate_energy
 
 logger = logging.getLogger(__name__)
 
@@ -961,13 +961,13 @@ class EnergyDataset:
         file_name = os.path.splitext(os.path.basename(wav_file))[0]
         return os.path.join(cache_path, file_name + "_energy.npy")
 
-    @staticmethod
-    def _compute_and_save_energy(ap, wav_file, energy_file=None):
-        wav = ap.load_wav(wav_file)
-        energy = calculate_energy(wav, fft_size=ap.fft_size, hop_length=ap.hop_length, win_length=ap.win_length)
-        if energy_file:
-            np.save(energy_file, energy)
-        return energy
+#    @staticmethod
+#    def _compute_and_save_energy(ap, wav_file, energy_file=None):
+#        wav = ap.load_wav(wav_file)
+#        energy = calculate_energy(wav, fft_size=ap.fft_size, hop_length=ap.hop_length, win_length=ap.win_length)
+#        if energy_file:
+#            np.save(energy_file, energy)
+#        return energy
 
     @staticmethod
     def compute_energy_stats(energy_vecs):

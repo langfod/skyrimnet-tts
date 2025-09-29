@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import librosa
 import torch
 import torch.nn.functional as F
 import torchaudio
@@ -363,8 +362,9 @@ class Xtts(BaseTTS):
             audio = audio[:, : load_sr * max_ref_length].to(self.device)
             if sound_norm_refs:
                 audio = (audio / torch.abs(audio).max()) * 0.75
-            if librosa_trim_db is not None:
-                audio = librosa.effects.trim(audio, top_db=librosa_trim_db)[0]
+            # TODO: Replace librosa.effects.trim with torch-native implementation
+            # if librosa_trim_db is not None:
+            #     audio = librosa.effects.trim(audio, top_db=librosa_trim_db)[0]
 
             # compute latents for the decoder
             speaker_embedding = self.get_speaker_embedding(audio, load_sr)

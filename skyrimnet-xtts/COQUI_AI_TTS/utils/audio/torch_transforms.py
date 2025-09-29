@@ -1,8 +1,8 @@
 import logging
 
-import librosa
 import torch
 from torch import nn
+import torchaudio.functional as taF
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +79,16 @@ def spec_to_mel(
     global mel_basis
     fmax_dtype_device = f"{n_fft}_{fmax}_{spec.dtype}_{spec.device}"
     if fmax_dtype_device not in mel_basis:
-        # TODO: switch librosa to torchaudio
-        mel = librosa.filters.mel(sr=sample_rate, n_fft=n_fft, n_mels=num_mels, fmin=fmin, fmax=fmax)
+        # Use torchaudio instead of librosa for mel filterbank
+        mel = taF.melscale_fbanks(
+            n_freqs=n_fft // 2 + 1,
+            f_min=fmin,
+            f_max=fmax,
+            n_mels=num_mels,
+            sample_rate=sample_rate,
+            norm=None,
+            mel_scale="htk"
+        ).T.numpy()
         mel_basis[fmax_dtype_device] = torch.from_numpy(mel).to(dtype=spec.dtype, device=spec.device)
     mel = torch.matmul(mel_basis[fmax_dtype_device], spec)
     return amp_to_db(mel)
@@ -253,13 +261,15 @@ class TorchSTFT(nn.Module):  # pylint: disable=abstract-method
         return S
 
     def _build_mel_basis(self):
-        mel_basis = librosa.filters.mel(
-            sr=self.sample_rate,
-            n_fft=self.n_fft,
+        # Use torchaudio instead of librosa for mel filterbank
+        mel_scale = "htk" if self.use_htk else "slaney"
+        mel_basis = taF.melscale_fbanks(
+            n_freqs=self.n_fft // 2 + 1,
+            f_min=self.mel_fmin,
+            f_max=self.mel_fmax,
             n_mels=self.n_mels,
-            fmin=self.mel_fmin,
-            fmax=self.mel_fmax,
-            htk=self.use_htk,
+            sample_rate=self.sample_rate,
             norm=self.mel_norm,
-        )
+            mel_scale=mel_scale
+        ).T.numpy()
         self.mel_basis = torch.from_numpy(mel_basis).float()
