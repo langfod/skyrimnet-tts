@@ -48,9 +48,8 @@ def load_model(model_name="xtts_v2", use_cpu=False):
         # Download/locate model files
         output_model_path, output_config_path, model_item = ModelManager(progress_bar=True).download_model(model_name)
         
-        # Load configuration
-        config = XttsConfig()
-        config.load_json(output_config_path)
+        # Load configuration using the fixed method
+        config = XttsConfig.load_from_json(output_config_path)
         
         # Initialize model
         model = Xtts.init_from_config(config)

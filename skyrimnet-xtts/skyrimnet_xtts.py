@@ -256,7 +256,7 @@ def build_interface():
             with gr.Column():
                 gr.Markdown("## Conditioning Parameters")
                 temperature = gr.Slider(0, 2, value=1, step=0.01, label="Temperature")
-                repetition_penalty = gr.Slider(1, 3, value=2, step=0.1, label="Repetition Penalty")
+                repetition_penalty = gr.Slider(1, 3, value=2.1, step=0.1, label="Repetition Penalty")
                 top_k = gr.Slider(1, 100, value=50, step=1, label="Top-K", precision=0)
                 top_p = gr.Slider(0, 1, value=1, step=0.01, label="Top-P")
                 speed = gr.Slider(0.5, 2, value=1.0, step=0.01, label="Speed")

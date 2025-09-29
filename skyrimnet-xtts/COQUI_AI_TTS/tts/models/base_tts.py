@@ -14,7 +14,6 @@ from COQUI_AI_TTS.model import BaseDashboardLogger, DistributedSampler, Distribu
 
 from COQUI_AI_TTS.config import get_from_config_or_model_args
 # BaseTrainerModel removed - using torch.nn.Module directly for inference-only deployment
-import torch
 from COQUI_AI_TTS.tts.configs.shared_configs import BaseTTSConfig
 from COQUI_AI_TTS.tts.datasets.dataset import TTSDataset
 from COQUI_AI_TTS.tts.utils.data import get_length_balancer_weights

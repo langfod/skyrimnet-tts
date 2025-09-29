@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import json
 
 from COQUI_AI_TTS.tts.configs.shared_configs import BaseTTSConfig
 from COQUI_AI_TTS.tts.models.xtts import XttsArgs, XttsAudioConfig
@@ -106,3 +107,47 @@ class XttsConfig(BaseTTSConfig):
     gpt_cond_chunk_len: int = 4
     max_ref_len: int = 10
     sound_norm_refs: bool = False
+
+    @classmethod
+    def load_from_json(cls, json_path: str):
+        """Load config from JSON file with proper nested object handling.
+        
+        This method works around coqpit's inability to properly deserialize
+        nested objects like XttsArgs and XttsAudioConfig from JSON dicts.
+        """
+        with open(json_path, 'r') as f:
+            config_data = json.load(f)
+        
+        # Create base config
+        config = cls()
+        
+        # Set simple fields that exist in both JSON and config
+        simple_fields = [
+            'model', 'languages', 'temperature', 'length_penalty', 'repetition_penalty',
+            'top_k', 'top_p', 'num_gpt_outputs', 'gpt_cond_len', 'gpt_cond_chunk_len',
+            'max_ref_len', 'sound_norm_refs', 'model_dir'
+        ]
+        
+        for field_name in simple_fields:
+            if field_name in config_data and config_data[field_name] is not None:
+                setattr(config, field_name, config_data[field_name])
+        
+        # Handle model_args (dict -> XttsArgs)
+        if 'model_args' in config_data and config_data['model_args'] is not None:
+            model_args_dict = config_data['model_args']
+            model_args = XttsArgs()
+            for key, value in model_args_dict.items():
+                if hasattr(model_args, key) and value is not None:
+                    setattr(model_args, key, value)
+            config.model_args = model_args
+        
+        # Handle audio (dict -> XttsAudioConfig) 
+        if 'audio' in config_data and config_data['audio'] is not None:
+            audio_dict = config_data['audio']
+            audio_config = XttsAudioConfig()
+            for key, value in audio_dict.items():
+                if hasattr(audio_config, key) and value is not None:
+                    setattr(audio_config, key, value)
+            config.audio = audio_config
+        
+        return config

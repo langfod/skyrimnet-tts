@@ -19,13 +19,11 @@ gradio
 
 ## Section added for TTS inclusion project.
 ##
-pysbd                      # Sentence boundary detection (multilingual)
+pysbd-yurts                      # Sentence boundary detection (multilingual)
 pypinyin
-#jieba                       # Chinese text segmentation
-#zh_num2words               # Chinese number to words conversion
 jamo                       # Korean character processing
-g2pkk                      # Korean grapheme-to-phoneme conversion
-pydub                      # Audio format conversion and manipulation
+#g2pkk                      # Korean grapheme-to-phoneme conversion
+#pydub                      # Audio format conversion and manipulation
 
 librosa                      # Audio analysis and manipulation
 soundfile                   # Audio file I/O
@@ -42,8 +40,8 @@ gruut-ipa                   # IPA phoneme manipulation (required by gruut)
 
 # Multilingual text processing replacement
 spacy-pkuseg                     # Chinese text segmentation alternative
-kss                           # Korean sentence segmentation
+#kss                           # Korean sentence segmentation
 g2pk2                        # Korean grapheme-to-phoneme conversion alternative
-epitran                      # Multilingual grapheme-to-phoneme conversion alternative
+#epitran                      # Multilingual grapheme-to-phoneme conversion alternative
 # For testing 
 requests
