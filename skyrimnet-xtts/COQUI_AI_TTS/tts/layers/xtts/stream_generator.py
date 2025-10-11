@@ -225,7 +225,7 @@ class NewGenerationMixin(GenerationMixin):
         ):
             max_cache_length += inputs_tensor.shape[1]
         self._prepare_cache_for_generation(
-            generation_config, model_kwargs, assistant_model, batch_size, max_cache_length, device
+            generation_config, model_kwargs, assistant_model, batch_size, max_cache_length, device=device
         )
 
         if self.device.type != input_ids.device.type:

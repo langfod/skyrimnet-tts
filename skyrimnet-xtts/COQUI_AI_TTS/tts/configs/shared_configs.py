@@ -168,16 +168,7 @@ class BaseTTSConfig(BaseTrainingConfig):
         _supports_cloning:
             Whether voice cloning is supported. Accessed via `supports_cloning` property.
 
-        use_phonemes (bool):
-            enable / disable phoneme use.
 
-        phonemizer (str):
-            Name of the phonemizer to use. If set None, the phonemizer will be selected by `phoneme_language`.
-            Defaults to None.
-
-        phoneme_language (str):
-            Language code for the phonemizer. You can check the list of supported languages by running
-            `python TTS/tts/utils/text/phonemizers/__init__.py`. Defaults to None.
 
         compute_input_seq_cache (bool):
             enable / disable precomputation of the phoneme sequences. At the expense of some delay at the beginning of
@@ -305,15 +296,11 @@ class BaseTTSConfig(BaseTrainingConfig):
     audio: BaseAudioConfig = field(default_factory=BaseAudioConfig)
     model_args: Coqpit | None = None
     _supports_cloning: bool = False
-    # phoneme settings
-    use_phonemes: bool = False
-    phonemizer: str = None
-    phoneme_language: str = None
+    # text processing settings
     compute_input_seq_cache: bool = False
     text_cleaner: str = None
     enable_eos_bos_chars: bool = False
     test_sentences_file: str = ""
-    phoneme_cache_path: str = None
     # vocabulary parameters
     characters: CharactersConfig = None
     add_blank: bool = False

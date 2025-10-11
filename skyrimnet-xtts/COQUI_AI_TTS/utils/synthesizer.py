@@ -178,8 +178,6 @@ class Synthesizer(nn.Module):
         # pylint: disable=global-statement
         self.tts_config = load_config(tts_config_path)
         self.output_sample_rate = self.tts_config.audio["sample_rate"]
-        if self.tts_config["use_phonemes"] and self.tts_config["phonemizer"] is None:
-            raise ValueError("Phonemizer is not defined in the TTS config.")
 
         self.tts_model = setup_tts_model(config=self.tts_config)
 

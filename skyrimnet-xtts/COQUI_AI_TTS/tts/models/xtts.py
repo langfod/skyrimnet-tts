@@ -2,7 +2,10 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from COQUI_AI_TTS.tts.configs.xtts_config import XttsConfig
 
 import torch
 import torch.nn.functional as F
@@ -270,7 +273,8 @@ class Xtts(BaseTTS):
 
                 mel_chunk = wav_to_mel_cloning(
                     audio_chunk,
-                    mel_norms=self.mel_stats.cpu(),
+                    mel_norms=self.mel_stats.to(self.device),
+                    device=self.device,
                     n_fft=2048,
                     hop_length=256,
                     win_length=1024,
@@ -292,7 +296,8 @@ class Xtts(BaseTTS):
         else:
             mel = wav_to_mel_cloning(
                 audio,
-                mel_norms=self.mel_stats.cpu(),
+                mel_norms=self.mel_stats.to(self.device),
+                device=self.device,
                 n_fft=4096,
                 hop_length=1024,
                 win_length=4096,
@@ -461,6 +466,7 @@ class Xtts(BaseTTS):
         num_beams: int = 1,
         speed: float = 1.0,
         enable_text_splitting: bool = False,
+        return_as_tensor: bool = False,
         **hf_generate_kwargs: Any,
     ):
         """
@@ -489,12 +495,16 @@ class Xtts(BaseTTS):
             top_p: (float) P value used in nucleus sampling. (0,1]. Lower values mean the decoder produces more "likely"
                 (aka boring) outputs. Defaults to 0.8.
 
+            return_as_tensor: (bool) If True, returns tensors on device (CUDA if available) instead of transferring 
+                to CPU and converting to numpy. Useful for CUDA optimization. Defaults to False for backwards compatibility.
+
             hf_generate_kwargs: (`**kwargs`) The huggingface Transformers generate API is used for the autoregressive
                 transformer. Extra keyword args fed to this function get forwarded directly to that API. Documentation
                 here: https://huggingface.co/docs/transformers/internal/generation_utils
 
         Returns:
-            Generated audio clip(s) as a torch tensor. Shape 1,S if k=1 else, (k,1,S) where S is the sample length.
+            Generated audio clip(s). If return_as_tensor=True, returns torch tensors on device. 
+            Otherwise returns numpy arrays (original behavior). Shape 1,S if k=1 else, (k,1,S) where S is the sample length.
             Sample rate is 24kHz.
         """
         language = language.split("-")[0]  # remove the country code
@@ -551,14 +561,28 @@ class Xtts(BaseTTS):
                         gpt_latents.transpose(1, 2), scale_factor=length_scale, mode="linear"
                     ).transpose(1, 2)
 
-                gpt_latents_list.append(gpt_latents.cpu())
-                wavs.append(self.hifigan_decoder(gpt_latents, g=speaker_embedding).cpu().squeeze())
+                # Keep tensors on device if return_as_tensor is True
+                if return_as_tensor:
+                    gpt_latents_list.append(gpt_latents)
+                    wavs.append(self.hifigan_decoder(gpt_latents, g=speaker_embedding).squeeze())
+                else:
+                    gpt_latents_list.append(gpt_latents.cpu())
+                    wavs.append(self.hifigan_decoder(gpt_latents, g=speaker_embedding).cpu().squeeze())
 
-        return {
-            "wav": torch.cat(wavs, dim=0).numpy(),
-            "gpt_latents": torch.cat(gpt_latents_list, dim=1).numpy(),
-            "speaker_embedding": speaker_embedding,
-        }
+        if return_as_tensor:
+            # Return tensors on device for CUDA optimization
+            return {
+                "wav": torch.cat(wavs, dim=0),
+                "gpt_latents": torch.cat(gpt_latents_list, dim=1),
+                "speaker_embedding": speaker_embedding,
+            }
+        else:
+            # Original behavior: return numpy arrays
+            return {
+                "wav": torch.cat(wavs, dim=0).numpy(),
+                "gpt_latents": torch.cat(gpt_latents_list, dim=1).numpy(),
+                "speaker_embedding": speaker_embedding,
+            }
 
     def handle_chunks(self, wav_gen, wav_gen_prev, wav_overlap, overlap_len):
         """Handle chunk formatting in streaming mode"""
@@ -689,8 +713,10 @@ class Xtts(BaseTTS):
         self.gpt.init_gpt_for_inference()
         super().eval()
 
-    def get_compatible_checkpoint_state_dict(self, model_path):
-        checkpoint = load_fsspec(model_path, map_location=torch.device("cpu"))["model"]
+    def get_compatible_checkpoint_state_dict(self, model_path, map_location=None):
+        if map_location is None:
+            map_location = torch.device("cpu")  # Default behavior
+        checkpoint = load_fsspec(model_path, map_location=map_location)["model"]
         # remove xtts gpt trainer extra keys
         ignore_keys = ["torch_mel_spectrogram_style_encoder", "torch_mel_spectrogram_dvae", "dvae"]
         for key in list(checkpoint.keys()):

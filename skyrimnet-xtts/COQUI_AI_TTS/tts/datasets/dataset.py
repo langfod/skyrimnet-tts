@@ -199,14 +199,6 @@ class TTSDataset(Dataset):
         self.pitch_computed = False
         self.tokenizer = tokenizer
 
-        if self.tokenizer.use_phonemes:
-            self.phoneme_dataset = PhonemeDataset(
-                self.samples,
-                self.tokenizer,
-                phoneme_cache_path,
-                precompute_num_workers=precompute_num_workers,
-            )
-
         if compute_f0:
             self.f0_dataset = F0Dataset(
                 self.samples,
@@ -291,10 +283,7 @@ class TTSDataset(Dataset):
         return np.load(attn_file)
 
     def get_token_ids(self, idx, text):
-        if self.tokenizer.use_phonemes:
-            token_ids = self.get_phonemes(idx, text)["token_ids"]
-        else:
-            token_ids = self.tokenizer.text_to_ids(text)
+        token_ids = self.tokenizer.text_to_ids(text)
         return np.array(token_ids, dtype=np.int32)
 
     def load_data(self, idx) -> dict[str, Any]:

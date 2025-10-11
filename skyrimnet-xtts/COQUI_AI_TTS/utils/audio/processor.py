@@ -7,26 +7,44 @@ import torchaudio
 
 from COQUI_AI_TTS.tts.utils.helpers import StandardScaler
 from COQUI_AI_TTS.utils.audio.numpy_transforms import (
-    amp_to_db,
     build_mel_basis,
-    #compute_f0,
-    db_to_amp,
+    #compute_f0,  # Currently commented out in numpy_transforms.py
     deemphasis,
     find_endpoint,
-    griffin_lim,
     load_wav,
-    mel_to_spec,
     millisec_to_length,
     preemphasis,
     rms_volume_norm,
     save_wav,
-    spec_to_mel,
     stft,
     trim_silence,
     volume_norm,
 )
 
 logger = logging.getLogger(__name__)
+
+# Import CuPy-accelerated transforms with fallback to NumPy versions
+try:
+    from COQUI_AI_TTS.utils.audio.cupy_transforms import (
+        amp_to_db,
+        db_to_amp,
+        griffin_lim,
+        mel_to_spec,
+        spec_to_mel,
+        CUPY_AVAILABLE,
+    )
+    logger.info(f"Loaded CuPy-accelerated audio transforms (CuPy available: {CUPY_AVAILABLE})")
+except ImportError:
+    # Fallback to NumPy versions
+    from COQUI_AI_TTS.utils.audio.numpy_transforms import (
+        amp_to_db,
+        db_to_amp,
+        griffin_lim,
+        mel_to_spec,
+        spec_to_mel,
+    )
+    CUPY_AVAILABLE = False
+    logger.info("Using NumPy audio transforms (CuPy not available)")
 
 # pylint: disable=too-many-public-methods
 
@@ -476,38 +494,22 @@ class AudioProcessor:
             pad_mode=self.stft_pad_mode,
         )
 
-    def compute_f0(self, x: np.ndarray) -> np.ndarray:
-        """Compute pitch (f0) of a waveform using the same parameters used for computing melspectrogram.
-
-        Args:
-            x (np.ndarray): Waveform.
-
-        Returns:
-            np.ndarray: Pitch.
-
-        Examples:
-            >>> WAV_FILE = filename = librosa.example('vibeace')
-            >>> from COQUI_AI_TTS.config import BaseAudioConfig
-            >>> from COQUI_AI_TTS.utils.audio import AudioProcessor
-            >>> conf = BaseAudioConfig(pitch_fmax=640, pitch_fmin=1)
-            >>> ap = AudioProcessor(**conf)
-            >>> wav = ap.load_wav(WAV_FILE, sr=ap.sample_rate)[:5 * ap.sample_rate]
-            >>> pitch = ap.compute_f0(wav)
-        """
-        # align F0 length to the spectrogram length
-        if len(x) % self.hop_length == 0:
-            x = np.pad(x, (0, self.hop_length // 2), mode=self.stft_pad_mode)
-
-        return compute_f0(
-            x=x,
-            pitch_fmax=self.pitch_fmax,
-            pitch_fmin=self.pitch_fmin,
-            hop_length=self.hop_length,
-            win_length=self.win_length,
-            sample_rate=self.sample_rate,
-            stft_pad_mode=self.stft_pad_mode,
-            center=True,
-        )
+    # compute_f0 method temporarily disabled - function not available in numpy_transforms.py
+    # def compute_f0(self, x: np.ndarray) -> np.ndarray:
+    #     """Compute pitch (f0) of a waveform using the same parameters used for computing melspectrogram."""
+    #     # align F0 length to the spectrogram length
+    #     if len(x) % self.hop_length == 0:
+    #         x = np.pad(x, (0, self.hop_length // 2), mode=self.stft_pad_mode)
+    #     return compute_f0(
+    #         x=x,
+    #         pitch_fmax=self.pitch_fmax,
+    #         pitch_fmin=self.pitch_fmin,
+    #         hop_length=self.hop_length,
+    #         win_length=self.win_length,
+    #         sample_rate=self.sample_rate,
+    #         stft_pad_mode=self.stft_pad_mode,
+    #         center=True,
+    #     )
 
     ### Audio Processing ###
     def find_endpoint(self, wav: np.ndarray, min_silence_sec=0.8) -> int:

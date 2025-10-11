@@ -71,8 +71,11 @@ else {
     }
     New-Item -ItemType Directory -Path "archive/$PACKAGE_NAME" -Force
     New-Item -ItemType Directory -Path "archive/$PACKAGE_NAME/assets" -Force
-    
-    Copy-Item -Path "speakers" -Destination "archive/$PACKAGE_NAME\" -Force -Recurse
+
+    Get-ChildItem -Path "speakers" -Directory | Copy-Item -Destination "archive/$PACKAGE_NAME/speakers" 
+
+    Copy-Item -Path "speakers\en\malebrute.wav" -Destination "archive/$PACKAGE_NAME/speakers/en\" -Force -Recurse
+    Copy-Item -Path "speakers\en\malecommoner.wav" -Destination "archive/$PACKAGE_NAME/speakers/en\" -Force -Recurse
     Copy-Item -Path "assets\silence_100ms.wav" -Destination "archive/$PACKAGE_NAME/assets\" -Force -Recurse
     Copy-Item -Path "skyrimnet_config.txt" -Destination "archive/$PACKAGE_NAME\" -Force 
     Copy-Item -Path "examples\Start_XTTS.bat" -Destination "archive/$PACKAGE_NAME\" -Force

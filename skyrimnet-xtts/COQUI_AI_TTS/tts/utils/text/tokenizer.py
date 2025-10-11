@@ -4,8 +4,6 @@ from typing import Union
 
 from COQUI_AI_TTS.tts.utils.text import cleaners
 from COQUI_AI_TTS.tts.utils.text.characters import BaseCharacters, Graphemes, IPAPhonemes
-from COQUI_AI_TTS.tts.utils.text.phonemizers import DEF_LANG_TO_PHONEMIZER, get_phonemizer_by_name
-from COQUI_AI_TTS.tts.utils.text.phonemizers.multi_phonemizer import MultiPhonemizer
 from COQUI_AI_TTS.utils.generic_utils import get_import_path, import_class
 
 logger = logging.getLogger(__name__)
@@ -17,22 +15,16 @@ class TTSTokenizer:
     Token IDs for OOV chars are discarded but those are stored in `self.not_found_characters` for later.
 
     Args:
-        use_phonemes (bool):
-            Whether to use phonemes instead of characters. Defaults to False.
-
         characters (Characters):
             A Characters object to use for character-to-ID and ID-to-character mappings.
 
         text_cleaner (callable):
-            A function to pre-process the text before tokenization and phonemization. Defaults to None.
-
-        phonemizer (Phonemizer):
-            A phonemizer object or a dict that maps language codes to phonemizer objects. Defaults to None.
+            A function to pre-process the text before tokenization. Defaults to None.
 
     Example:
 
         >>> from COQUI_AI_TTS.tts.utils.text.tokenizer import TTSTokenizer
-        >>> tokenizer = TTSTokenizer(use_phonemes=False, characters=Graphemes())
+        >>> tokenizer = TTSTokenizer(characters=Graphemes())
         >>> text = "Hello world!"
         >>> ids = tokenizer.text_to_ids(text)
         >>> text_hat = tokenizer.ids_to_text(ids)
@@ -41,20 +33,16 @@ class TTSTokenizer:
 
     def __init__(
         self,
-        use_phonemes: bool = False,
         text_cleaner: Callable[[str], str] | None = None,
         characters: BaseCharacters | None = None,
-        phonemizer: Union["Phonemizer", dict] | None = None,
         add_blank: bool = False,
         use_eos_bos: bool = False,
     ):
         self.text_cleaner = text_cleaner
-        self.use_phonemes = use_phonemes
         self.add_blank = add_blank
         self.use_eos_bos = use_eos_bos
         self.characters = characters
         self.not_found_characters = []
-        self.phonemizer = phonemizer
 
     @property
     def characters(self):
@@ -101,20 +89,17 @@ class TTSTokenizer:
         TODO:
             - Add support for language-specific processing.
 
-        1. Text normalizatin
-        2. Phonemization (if use_phonemes is True)
-        3. Add blank char between characters
-        4. Add BOS and EOS characters
-        5. Text to token IDs
+        Steps:
+        1. Text normalization
+        2. Add blank char between characters
+        3. Add BOS and EOS characters
+        4. Text to token IDs
         """
         # TODO: text cleaner should pick the right routine based on the language
         logger.debug("Tokenizer input text: %s", text)
         if self.text_cleaner is not None:
             text = self.text_cleaner(text)
             logger.debug("Cleaned text: %s", text)
-        if self.use_phonemes:
-            text = self.phonemizer.phonemize(text, separator="", language=language)
-            logger.debug("Phonemes: %s", text)
         text = self.encode(text)
         if self.add_blank:
             text = self.intersperse_blank_char(text, True)
@@ -144,21 +129,17 @@ class TTSTokenizer:
         indent = "\t" * level
         logger.info("%s| add_blank: %s", indent, self.add_blank)
         logger.info("%s| use_eos_bos: %s", indent, self.use_eos_bos)
-        logger.info("%s| use_phonemes: %s", indent, self.use_phonemes)
-        if self.use_phonemes:
-            logger.info("%s| phonemizer:", indent)
-            self.phonemizer.print_logs(level + 1)
         if len(self.not_found_characters) > 0:
             logger.info("%s| %d characters not found:", indent, len(self.not_found_characters))
             for char in self.not_found_characters:
                 logger.info("%s| %s", indent, char)
 
     @staticmethod
-    def init_from_config(config: "Coqpit", characters: BaseCharacters | None = None):
+    def init_from_config(config, characters: BaseCharacters | None = None):
         """Init Tokenizer object from config
 
         Args:
-            config (Coqpit): Coqpit model config.
+            config: Model config object.
             characters (BaseCharacters): Defines the model character set. If not set, use the default options based on
                 the config values. Defaults to None.
         """
@@ -176,51 +157,19 @@ class TTSTokenizer:
                     msg = f"{config.characters.characters_class} is not a subclass of BaseCharacters."
                     raise TypeError(msg)
                 characters, new_config = CharactersClass.init_from_config(config)
-            # set characters based on config
+            # set characters based on config - always use graphemes since phonemes are removed
             else:
-                if config.use_phonemes:
-                    # init phoneme set
-                    characters, new_config = IPAPhonemes().init_from_config(config)
-                else:
-                    # init character set
-                    characters, new_config = Graphemes().init_from_config(config)
-
+                # init character set (graphemes only, no phonemes)
+                characters, new_config = Graphemes().init_from_config(config)
         else:
             characters, new_config = characters.init_from_config(config)
 
         # set characters class
         new_config.characters.characters_class = get_import_path(characters)
 
-        # init phonemizer
-        phonemizer = None
-        if config.use_phonemes:
-            if "phonemizer" in config and config.phonemizer == "multi_phonemizer":
-                lang_to_phonemizer_name = {}
-                for dataset in config.datasets:
-                    if dataset.language != "":
-                        lang_to_phonemizer_name[dataset.language] = dataset.phonemizer
-                    else:
-                        raise ValueError("Multi phonemizer requires language to be set for each dataset.")
-                phonemizer = MultiPhonemizer(lang_to_phonemizer_name)
-            else:
-                phonemizer_kwargs = {"language": config.phoneme_language}
-                if "phonemizer" in config and config.phonemizer:
-                    phonemizer = get_phonemizer_by_name(config.phonemizer, **phonemizer_kwargs)
-                else:
-                    try:
-                        phonemizer = get_phonemizer_by_name(
-                            DEF_LANG_TO_PHONEMIZER[config.phoneme_language], **phonemizer_kwargs
-                        )
-                        new_config.phonemizer = phonemizer.name()
-                    except KeyError as e:
-                        raise ValueError(
-                            f"""No phonemizer found for language {config.phoneme_language}.
-                            You may need to install a third party library for this language."""
-                        ) from e
-
         return (
             TTSTokenizer(
-                config.use_phonemes, text_cleaner, characters, phonemizer, config.add_blank, config.enable_eos_bos_chars
+                text_cleaner, characters, config.add_blank, config.enable_eos_bos_chars
             ),
             new_config,
         )

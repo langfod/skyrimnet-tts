@@ -21,11 +21,11 @@ def generate_audio_file(
     speaker_wav: str,
     text: str,
     uuid: Optional[int] = None,
-    stream: bool = True,
+    stream: bool = False,
     **inference_kwargs
 ) -> Path:
     """
-    Generate audio file using streaming inference to avoid CPU transfers.
+    Generate audio file using streaming inference with CUDA optimization to avoid CPU transfers.
     
     Args:
         model: The TTS model to use for inference
@@ -96,6 +96,7 @@ def generate_audio_file(
         inference_params['enable_text_splitting'] = inference_kwargs['enable_text_splitting']
     
     # Generate audio using streaming to avoid CPU transfers
+    # Note: Streaming inference keeps tensors on GPU automatically
     #logger.info("Running model inference (streaming)...")
     #try:
     if stream:
@@ -110,9 +111,9 @@ def generate_audio_file(
     #except Exception as e:
     else:
         #logger.warning(f"Streaming inference failed ({e}), falling back to regular inference")
-        # Fallback to regular inference
-        wav_result = model.inference(**inference_params)
-        wav_out = torch.tensor(wav_result["wav"])
+        # Fallback to regular inference with CUDA optimization
+        wav_result = model.inference(**inference_params, return_as_tensor=True)
+        wav_out = wav_result["wav"]
         wav_chunks = None
     
     # Save audio file

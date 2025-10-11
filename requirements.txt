@@ -5,26 +5,26 @@ torchaudio
 
 setuptools<81
 cupy-cuda12x
-numpy
+pytorch-pfn-extras                # Optional: CuPy-PyTorch memory pool integration
+
 psutil
 spacy[cuda12x]
+numpy
 spacy[ja]
 pydantic
 loguru
 uvicorn
-transformers<4.56.0 #until coqui-tts updates to support it
-# coqui-tts[languages]  # EXTRACTED TO LOCAL COQUI_AI_TTS DIRECTORY - INFERENCE ONLY
-# coqui_tts_trainer         # REMOVED - Not needed for inference-only deployment
+transformers
+
 gradio
 
 
 ## Section added for TTS inclusion project.
-##
-pysbd-yurts                      # Sentence boundary detection (multilingual)
+# Text processing libraries for various languages
 pypinyin
 jamo                       # Korean character processing
-#g2pkk                      # Korean grapheme-to-phoneme conversion
-#pydub                      # Audio format conversion and manipulation
+fugashi                     # Japanese tokenizer
+unidic-lite                 # Japanese dictionary for fugashi
 
 #librosa                      # Audio analysis and manipulation
 soundfile                   # Audio file I/O
@@ -34,15 +34,16 @@ coqpit                      # Configuration management
 fsspec                      # File system abstraction
 tqdm                        # Progress bars
 
-anyascii                    # Unicode to ASCII conversion (used by TTS text cleaners)
-gruut                       # Multilingual phonemizer (replaces coqui-tts phonemization)
-gruut-ipa                   # IPA phoneme manipulation (required by gruut)
 
+num2words            # Number to words conversion (used by TTS text cleaners)
+einops                      # Tensor operations and manipulation
 
 # Multilingual text processing replacement
 spacy-pkuseg                     # Chinese text segmentation alternative
 kss                           # Korean sentence segmentation
 g2pk2                        # Korean grapheme-to-phoneme conversion alternative
-#epitran                      # Multilingual grapheme-to-phoneme conversion alternative
+
 # For testing 
 requests
+pyinstaller
+vulture

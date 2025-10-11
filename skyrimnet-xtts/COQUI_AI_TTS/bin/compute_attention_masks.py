@@ -78,7 +78,7 @@ Example run:
         symbols, phonemes = make_symbols(**C.characters)  # noqa: F811
 
     # load the model
-    num_chars = len(phonemes) if C.use_phonemes else len(symbols)
+    num_chars = len(symbols)  # always use symbols since phonemes are removed
     # TODO: handle multi-speaker
     model = setup_model(C)
     model, _ = load_checkpoint(model, args.model_path, use_cuda=args.use_cuda, eval=True)
@@ -95,9 +95,6 @@ Example run:
         meta_data=meta_data,
         characters=C.characters if "characters" in C.keys() else None,
         add_blank=C["add_blank"] if "add_blank" in C.keys() else False,
-        use_phonemes=C.use_phonemes,
-        phoneme_cache_path=C.phoneme_cache_path,
-        phoneme_language=C.phoneme_language,
         enable_eos_bos=C.enable_eos_bos_chars,
     )
 

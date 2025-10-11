@@ -1,20 +1,32 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
 from PyInstaller.utils.hooks import collect_submodules
-import warnings
-warnings.filterwarnings("ignore", module='setuptools.*', append=True)
-warnings.filterwarnings("ignore", module='numbpysbd.*', append=True)
-warnings.filterwarnings("ignore", module='jieba.*', append=True)
-warnings.filterwarnings("ignore", module='jamo.*', append=True)
-warnings.filterwarnings("ignore", module='g2pkk.*', append=True)
+
+
 
 
 datas = []
 hiddenimports = []
 
-# =============================================================================
-# IMPROVED DATA COLLECTION (Based on original with better exclusions)
-# =============================================================================
+def add_coqui_files(base_path):
+    """Helper function to add all COQUI_AI_TTS Python and JSON files recursively."""
+    coqui_path = Path(base_path)
+    if not coqui_path.exists():
+        return
+    
+    for root, dirs, files in os.walk(coqui_path):
+        for file in files:
+            if file.endswith(('.py', '.json')):
+                src_file = Path(root) / file
+                rel_path = src_file.relative_to(coqui_path)
+                dest_path = f"COQUI_AI_TTS/{str(rel_path).replace(os.sep, '/')}"
+                #print(f"Adding COQUI file: {src_file} -> {os.path.dirname(dest_path)}")
+                datas.append((str(src_file), os.path.dirname(dest_path)))
+
+# Include all COQUI_AI_TTS files recursively
+add_coqui_files("skyrimnet-xtts/COQUI_AI_TTS")
 
 # Core application data files with better exclusions
 datas += collect_data_files("gradio_client", excludes=[
@@ -27,9 +39,8 @@ datas += collect_data_files("gradio", excludes=[
 # Keep these smaller libraries as-is (minimal benefit to optimize)
 datas += collect_data_files("groovy")
 datas += collect_data_files("safehttpx")
-datas += collect_data_files("safehttpx")
 
-# CRITICAL: Include comprehensive spaCy data files (needed for TTS tokenizer)
+# CRITICAL: Include comprehensive spaCy data files
 import os
 import spacy
 
@@ -75,53 +86,14 @@ datas += collect_data_files("setuptools", excludes=[
     "docs/*", "*/docs/*"
 ])
 
-# TTS library with enhanced exclusions
-try:
-    datas += collect_data_files("TTS", excludes=[
-        "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
-        "test*", "*test*", "tests/*", "*/tests/*",
-        "example*", "*example*", "examples/*", "*/examples/*", 
-        "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*"
-    ])
-    datas += collect_data_files("TTS.vocoder", excludes=[
-        "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
-        "test*", "*test*", "example*", "*example*"
-    ])
-    datas += collect_data_files("TTS.vocoder.configs")
-except:
-    pass
-
-# Language processing libraries with exclusions
-datas += collect_data_files("gruut", excludes=[
-    "test*", "*test*", "example*", "*example*", "*.md", "*.txt", "*.rst"
-])
-datas += collect_data_files("unidic_lite", excludes=[
-    "test*", "*test*", "*.md", "*.txt", "*.rst"
-])
+#datas += collect_data_files("unidic_lite", excludes=[
+#    "test*", "*test*", "*.md", "*.txt", "*.rst"
+#])
 datas += collect_data_files("jamo", excludes=[
     "test*", "*test*", "*.md", "*.txt", "*.rst"
 ])
 
-# CRITICAL: Include librosa data files (needed for registry.txt and other example data)
-datas += collect_data_files("librosa", excludes=[
-    "test*", "*test*", "tests/*", "*/tests/*",
-    # Removed example exclusions to preserve example_data/registry.txt
-    "*.md", "*.rst", "docs/*", "*/docs/*"
-    # NOTE: Keep .txt files like registry.txt which are needed at runtime
-])
 
-# CRITICAL: Explicitly add librosa example_data files to ensure they're included
-import os
-import librosa
-librosa_path = os.path.dirname(librosa.__file__)
-librosa_example_data = os.path.join(librosa_path, 'util', 'example_data')
-if os.path.exists(librosa_example_data):
-    for file in os.listdir(librosa_example_data):
-        if file.endswith(('.txt', '.json', '.py')):
-            datas.append((
-                os.path.join(librosa_example_data, file),
-                'librosa/util/example_data'
-            ))
 
 # CRITICAL: Only include essential CuPy components (if available)
 try:
@@ -195,10 +167,6 @@ try:
 except ImportError:
     pass
 
-# TTS modules (reduce to essential only)
-hiddenimports += collect_submodules('TTS.tts.configs')
-hiddenimports += collect_submodules('TTS.tts.models')
-hiddenimports += collect_submodules('TTS.utils')
 
 # CRITICAL: Force inclusion of ALL spaCy language modules
 try:
@@ -251,12 +219,9 @@ hiddenimports += [
 
 # Language processing modules (only essential)
 hiddenimports += [
-    'gruut',
     'unidic_lite', 
+    'fugashi'
     'jamo',
-    'anyascii',
-    'inflect',
-    'pysbd',
     'jaraco',
     'setuptools',
     # CRITICAL: Core spaCy modules needed for TTS
@@ -270,7 +235,7 @@ hiddenimports += [
 
 # Add language-specific modules only if needed
 if any(lang.startswith("zh") for lang in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS):
-    hiddenimports += ['jieba', 'pypinyin']
+    hiddenimports += ['spacy_pkuseg', 'pypinyin']
 if "ko" in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS:
     hiddenimports += ['g2pkk', 'jamo']
 if "ja" in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS:
@@ -369,10 +334,10 @@ a = Analysis(
     noarchive=False,
     optimize=1,  # Conservative optimization
     module_collection_mode={ 
+        'skyrimnet-xtts.COQUI_AI_TTS.configs': 'py+pyz',
+        'skyrimnet-xtts.COQUI_AI_TTS.vocoder.models': 'py+pyz',
+        'skyrimnet-xtts.COQUI_AI_TTS.vocoder.layers': 'py+pyz',
         'gradio': 'py+pyz',
-        'TTS.vocoder.configs': 'py+pyz',
-        'TTS.vocoder.models': 'py+pyz',
-        'TTS.vocoder.layers': 'py+pyz',
         'torch': 'py+pyz',
     },
     cipher=None,

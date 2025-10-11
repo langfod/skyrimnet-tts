@@ -47,7 +47,7 @@ _CONFIG_FILE_PATH = "skyrimnet_config.txt"
 # Testing flag - when True, bypasses config loading and uses all API values
 _USE_API_MODE = False
 _FROM_GRADIO = False
-STREAM = True
+STREAM = False
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================

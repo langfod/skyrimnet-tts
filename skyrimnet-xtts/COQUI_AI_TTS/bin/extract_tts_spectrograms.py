@@ -58,9 +58,6 @@ def setup_loader(config: BaseTTSConfig, ap: AudioProcessor, r, speaker_manager: 
         d_vector_mapping=speaker_manager.embeddings if config.use_d_vector_file else None,
     )
 
-    if config.use_phonemes and config.compute_input_seq_cache:
-        # precompute phonemes to have a better estimate of sequence lengths.
-        dataset.compute_input_seq(config.num_loader_workers)
     dataset.preprocess_samples()
 
     return DataLoader(
