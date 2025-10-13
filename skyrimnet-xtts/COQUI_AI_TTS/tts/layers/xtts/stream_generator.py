@@ -271,6 +271,7 @@ class NewGenerationMixin(GenerationMixin):
             stopping_criteria=prepared_stopping_criteria,
             generation_config=generation_config,
             synced_gpus=synced_gpus,
+            logits_dtype=torch.float16 if self.use_bfloat16 else torch.float32,
             **model_kwargs,
         )
 
@@ -282,6 +283,7 @@ class NewGenerationMixin(GenerationMixin):
         stopping_criteria: StoppingCriteriaList,
         generation_config: GenerationConfig,
         synced_gpus: bool | None = False,
+        logits_dtype: torch.dtype = torch.float32,
         **model_kwargs,
     ) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
         r"""
@@ -414,7 +416,7 @@ class NewGenerationMixin(GenerationMixin):
 
             # Copy is needed to avoid keeping a hanging ref to outputs.logits which may be very large for first iteration
             # (the clone itself is always small)
-            next_token_logits = outputs.logits[:, -1, :].to(copy=True, dtype=torch.float32, device=input_ids.device)
+            next_token_logits = outputs.logits[:, -1, :].to(copy=True, dtype=logits_dtype, device=input_ids.device)
 
             # pre-process distribution
             next_token_scores = logits_processor(input_ids, next_token_logits)

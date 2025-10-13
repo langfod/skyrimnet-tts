@@ -387,7 +387,9 @@ if __name__ == "__main__":
     try:
         CURRENT_MODEL = initialize_model_with_cache(
             use_cpu=args.use_cpu,
-            validate=True
+            validate=True,
+            use_deepspeed=args.deepspeed,
+            use_bfloat16=args.use_bfloat16
         )
         logger.info("Model loaded successfully")
     except Exception as e:

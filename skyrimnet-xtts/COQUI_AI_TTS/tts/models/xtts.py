@@ -284,7 +284,7 @@ class Xtts(BaseTTS):
                     f_min=0,
                     f_max=8000,
                     n_mels=80,
-                )
+                ).to(dtype=self.gpt.dtype)
                 style_emb = self.gpt.get_style_emb(mel_chunk.to(self.device), None)
                 style_embs.append(style_emb)
 
@@ -307,7 +307,7 @@ class Xtts(BaseTTS):
                 f_min=0,
                 f_max=8000,
                 n_mels=80,
-            )
+            ).to(dtype=self.gpt.dtype)
             cond_latent = self.gpt.get_style_emb(mel.to(self.device))
         return cond_latent.transpose(1, 2)
 
@@ -509,8 +509,18 @@ class Xtts(BaseTTS):
         """
         language = language.split("-")[0]  # remove the country code
         length_scale = 1.0 / max(speed, 0.05)
-        gpt_cond_latent = gpt_cond_latent.to(self.device)
+        gpt_cond_latent = gpt_cond_latent.to(self.device).to(dtype=self.gpt.dtype)
         speaker_embedding = speaker_embedding.to(self.device)
+        # Ensure speaker_embedding has correct shape (batch, 512, 1) for Conv1d
+        if speaker_embedding.dim() == 1:
+            speaker_embedding = speaker_embedding.unsqueeze(0).unsqueeze(-1)  # [512] -> [1, 512, 1]
+        elif speaker_embedding.dim() == 2:
+            if speaker_embedding.shape[0] == 512:  # [512, 1] -> [1, 512, 1]
+                speaker_embedding = speaker_embedding.unsqueeze(0)
+            elif speaker_embedding.shape[1] == 512:  # [1, 512] -> [1, 512, 1]
+                speaker_embedding = speaker_embedding.unsqueeze(-1)
+        elif speaker_embedding.dim() == 3 and speaker_embedding.shape[-1] != 1:
+            speaker_embedding = speaker_embedding[..., :1]  # Take first time step
         if enable_text_splitting:
             text = split_sentence(text, language, self.tokenizer.char_limits[language])
         else:
@@ -632,8 +642,18 @@ class Xtts(BaseTTS):
     ):
         language = language.split("-")[0]  # remove the country code
         length_scale = 1.0 / max(speed, 0.05)
-        gpt_cond_latent = gpt_cond_latent.to(self.device)
+        gpt_cond_latent = gpt_cond_latent.to(self.device).to(dtype=self.gpt.dtype)
         speaker_embedding = speaker_embedding.to(self.device)
+        # Ensure speaker_embedding has correct shape (batch, 512, 1) for Conv1d
+        if speaker_embedding.dim() == 1:
+            speaker_embedding = speaker_embedding.unsqueeze(0).unsqueeze(-1)  # [512] -> [1, 512, 1]
+        elif speaker_embedding.dim() == 2:
+            if speaker_embedding.shape[0] == 512:  # [512, 1] -> [1, 512, 1]
+                speaker_embedding = speaker_embedding.unsqueeze(0)
+            elif speaker_embedding.shape[1] == 512:  # [1, 512] -> [1, 512, 1]
+                speaker_embedding = speaker_embedding.unsqueeze(-1)
+        elif speaker_embedding.dim() == 3 and speaker_embedding.shape[-1] != 1:
+            speaker_embedding = speaker_embedding[..., :1]  # Take first time step
         if enable_text_splitting:
             text = split_sentence(text, language, self.tokenizer.char_limits[language])
         else:
@@ -710,7 +730,7 @@ class Xtts(BaseTTS):
 
     def eval(self):  # pylint: disable=redefined-builtin
         """Sets the model to evaluation mode. Overrides the default eval() method to also set the GPT model to eval mode."""
-        self.gpt.init_gpt_for_inference()
+        self.gpt.init_gpt_for_inference(kv_cache=self.args.kv_cache, use_deepspeed=False, use_bfloat16=self.use_bfloat16)
         super().eval()
 
     def get_compatible_checkpoint_state_dict(self, model_path, map_location=None):
@@ -743,6 +763,7 @@ class Xtts(BaseTTS):
         strict: bool = True,
         use_deepspeed: bool = False,
         speaker_file_path: str | None = None,
+        use_bfloat16: bool = False,
     ):
         """
         Loads a checkpoint from disk and initializes the model's state and tokenizer.
@@ -786,6 +807,10 @@ class Xtts(BaseTTS):
             raise FileNotFoundError(msg)
 
         self.init_models()
+        self.use_bfloat16 = use_bfloat16
+
+        # Load model in float32 for compatibility
+        self.gpt.to(dtype=torch.float32)
 
         checkpoint = self.get_compatible_checkpoint_state_dict(model_path)
 
@@ -794,13 +819,23 @@ class Xtts(BaseTTS):
             self.load_state_dict(checkpoint, strict=strict)
         except:
             if eval:
-                self.gpt.init_gpt_for_inference(kv_cache=self.args.kv_cache)
+                self.gpt.init_gpt_for_inference(kv_cache=self.args.kv_cache, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
             self.load_state_dict(checkpoint, strict=strict)
+
+        # Apply bfloat16 to conditioning components if requested
+        if use_bfloat16:
+            # Convert conditioning components to bfloat16 for memory efficiency
+            self.gpt.conditioning_encoder.to(dtype=torch.bfloat16)
+            if hasattr(self.gpt, 'conditioning_perceiver') and self.gpt.conditioning_perceiver is not None:
+                self.gpt.conditioning_perceiver.to(dtype=torch.bfloat16)
+            # Keep GPT inference in float32
+            self.gpt.to(dtype=torch.float32)
 
         if eval:
             self.hifigan_decoder.eval()
-            self.gpt.init_gpt_for_inference(kv_cache=self.args.kv_cache, use_deepspeed=use_deepspeed)
+            self.gpt.init_gpt_for_inference(kv_cache=self.args.kv_cache, use_deepspeed=use_deepspeed, use_bfloat16=False)
             self.gpt.eval()
+        
 
     def train_step(self):
         raise NotImplementedError(

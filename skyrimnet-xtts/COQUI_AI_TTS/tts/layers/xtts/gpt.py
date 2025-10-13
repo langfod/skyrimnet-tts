@@ -127,7 +127,7 @@ class GPT(nn.Module):
             "heads": list(self.text_head.parameters()) + list(self.mel_head.parameters()),
         }
 
-    def init_gpt_for_inference(self, kv_cache=True, use_deepspeed=False):
+    def init_gpt_for_inference(self, kv_cache=True, use_deepspeed=False, use_bfloat16=False):
         seq_length = self.max_prompt_tokens + self.max_mel_tokens + self.max_text_tokens + 1
         gpt_config = GPT2Config(
             vocab_size=self.max_mel_tokens,
@@ -147,20 +147,42 @@ class GPT(nn.Module):
             self.final_norm,
             self.mel_head,
             kv_cache=kv_cache,
+            use_bfloat16=use_bfloat16,
         )
         self.gpt.wte = self.mel_embedding
 
-        if use_deepspeed:
-            import deepspeed
+        if use_bfloat16:
+            # For mixed precision: conditioning uses bfloat16, inference uses float32
+            self.dtype = torch.bfloat16  # For conditioning components
+        else:
+            self.dtype = torch.float32
 
-            self.ds_engine = deepspeed.init_inference(
-                model=self.gpt_inference.half(),  # Transformers models
-                mp_size=1,  # Number of GPU
-                dtype=torch.float32,  # desired data type of output
-                replace_method="auto",  # Lets DS autmatically identify the layer to replace
-                replace_with_kernel_inject=True,  # replace the model with the kernel injector
-            )
-            self.gpt_inference = self.ds_engine.module.eval()
+        # Keep GPT inference in float32 for compatibility
+        self.gpt.to(dtype=torch.float32)
+
+        # Keep conditioning parts in float32 for compatibility
+        if hasattr(self.gpt, 'conditioning_encoder'):
+            self.gpt.conditioning_encoder.to(dtype=torch.float32)
+        if hasattr(self.gpt, 'conditioning_perceiver') and self.gpt.conditioning_perceiver is not None:
+            self.gpt.conditioning_perceiver.to(dtype=torch.float32)
+        if use_deepspeed:
+            try:
+                import deepspeed
+                dtype = torch.bfloat16 if use_bfloat16 else torch.float32
+                self.gpt.to(dtype=dtype)
+                model_prep = self.gpt_inference.to(dtype) if use_bfloat16 else self.gpt_inference.half()
+                self.ds_engine = deepspeed.init_inference(
+                    model=model_prep,  # Transformers models
+                    mp_size=1,  # Number of GPU
+                    dtype=dtype,  # desired data type of output
+                    replace_method="auto",  # Lets DS autotically identify the layer to replace
+                    replace_with_kernel_inject=True,  # replace the model with the kernel injector
+                )
+                self.gpt_inference = self.ds_engine.module.eval()
+            except ImportError:
+                import traceback
+                traceback.print_exc()
+                raise ImportError("DeepSpeed is not installed. Please install it to use this feature.")
 
     def set_inputs_and_targets(self, input, start_token, stop_token):
         inp = F.pad(input, (1, 0), value=start_token)
@@ -275,6 +297,8 @@ class GPT(nn.Module):
         conds: (b, 1024, s)
         output: (b, 1024, 32)
         """
+        # Convert to the appropriate dtype for conditioning
+        cond_input = cond_input.to(dtype=self.dtype)
         conds = None
         if not return_latent:
             if cond_input.ndim == 4:
@@ -486,6 +510,8 @@ class GPT(nn.Module):
         text_inputs = F.pad(text_inputs, (1, 0), value=self.start_text_token)
         emb = self.text_embedding(text_inputs) + self.text_pos_embedding(text_inputs)
         emb = torch.cat([cond_latents, emb], dim=1)
+        # Keep embeddings in float32 for GPT inference compatibility
+        emb = emb.to(dtype=torch.float32)
         self.gpt_inference.store_prefix_emb(emb)
         gpt_inputs = torch.full(
             (

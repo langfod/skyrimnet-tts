@@ -26,7 +26,15 @@ COMMON_ARGS = {
     "--use_cpu": {
         "action": "store_true",
         "help": "Use CPU instead of CUDA for model inference"
-    }
+    },
+    "--deepspeed": {
+        "action": "store_true",
+        "help": "Use DeepSpeed for model inference (if supported)"
+    },
+    "--use_bfloat16": {
+        "action": "store_true",
+        "help": "Use bfloat16 precision for model inference (if supported)"
+    },
 }
 
 

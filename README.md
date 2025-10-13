@@ -8,6 +8,9 @@ Windows setup meant for use with SkyrimNet either locally (or local secondary PC
 - output files saved in `output_temp` folder under process timestamp folders
 - default server is at http://localhost:7860
 - Gradio UI is available there also.
+- added support for mixed precision using bfloat16 using the --use_bfloat16
+- added back support for deepspeed using the --deepspeed flag
+
 
 Based on [coqui-ai-TTS](https://github.com/idiap/coqui-ai-TTS)
 

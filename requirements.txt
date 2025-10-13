@@ -2,6 +2,14 @@
 torch<2.9
 torchaudio
 
+# Windows deepseed build
+https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'
+deepspeed ; sys_platform != 'win32'
+
+
+#triton-windows; sys_platform == 'win32' # tw
+#triton ; sys_platform != 'win32'  # tn
+
 
 setuptools<81
 cupy-cuda12x
@@ -21,29 +29,29 @@ gradio
 
 ## Section added for TTS inclusion project.
 # Text processing libraries for various languages
-pypinyin
-jamo                       # Korean character processing
-fugashi                     # Japanese tokenizer
-unidic-lite                 # Japanese dictionary for fugashi
+pypinyin           # Chinese pinyin conversion
+jamo               # Korean character processing
+fugashi            # Japanese tokenizer
+unidic-lite        # Japanese dictionary for fugashi
 
-#librosa                      # Audio analysis and manipulation
-soundfile                   # Audio file I/O
-scipy                       # Scientific computing (signal processing)
+soundfile          # Audio file I/O
+scipy              # Scientific computing (signal processing)
 
-coqpit                      # Configuration management
-fsspec                      # File system abstraction
-tqdm                        # Progress bars
+coqpit             # Configuration management
+fsspec             # File system abstraction
+tqdm               # Progress bars
 
 
-num2words            # Number to words conversion (used by TTS text cleaners)
-einops                      # Tensor operations and manipulation
+num2words          # Number to words conversion (used by TTS text cleaners)
+einops             # Tensor operations and manipulation
 
 # Multilingual text processing replacement
-spacy-pkuseg                     # Chinese text segmentation alternative
-kss                           # Korean sentence segmentation
-g2pk2                        # Korean grapheme-to-phoneme conversion alternative
+spacy-pkuseg       # Chinese text segmentation alternative
+kss                # Korean sentence segmentation
+g2pk2              # Korean grapheme-to-phoneme conversion alternative
 
 # For testing 
-requests
-pyinstaller
-vulture
+#requests
+#pyinstaller
+#wheel
+#vulture

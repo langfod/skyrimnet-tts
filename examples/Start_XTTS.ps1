@@ -87,57 +87,41 @@ Write-Host "`nAttempting to start SkyrimNet XTTS..." -ForegroundColor Green
 
 # Locate python to run the project. Prefer venv python if present.
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$venvPython = Join-Path $scriptRoot '.venv\Scripts\python.exe'
+$exePath = Join-Path $scriptRoot 'skyrimnet-xtts.exe'
 
-if (Test-Path $venvPython) {
-    $pythonPath = $venvPython
-    Write-Host "Using virtualenv python: $pythonPath"
-} else {
-    $pyCmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($pyCmd) {
-        $pythonPath = $pyCmd.Source
-        Write-Host "Using system python: $pythonPath"
-    } else {
-        Write-Host "No python executable found. Please create/activate a virtualenv or install Python and ensure it's in PATH." -ForegroundColor Red
+
+    if (!$exePath) {
+        Write-Host "No executable found" -ForegroundColor Red
         Read-Host -Prompt "Press Enter to exit"
         exit 1
     }
-}
 
-# Module to run (relative to repo root)
-$moduleToRun = Join-Path $scriptRoot 'skyrimnet-xtts'
-if (-not (Test-Path $moduleToRun)) {
-    Write-Host "Could not find module: $moduleToRun" -ForegroundColor Red
-    Read-Host -Prompt "Press Enter to exit"
-    exit 1
-}
 
-# Build Python script arguments - use parameters with defaults
-$pythonArgs = "--server $server --port $port"
+$exeArgs = "--server $server --port $port"
 if ($cpu) {
-    $pythonArgs = "$pythonArgs --use_cpu"
+    $exeArgs = "$exeArgs --use_cpu"
     Write-Host "CPU mode enabled" -ForegroundColor Cyan
 }
 
 if ($deepspeed) {
-    $pythonArgs = "$pythonArgs --deepspeed"
+    $exeArgs = "$exeArgs --deepspeed"
     Write-Host "DeepSpeed mode enabled" -ForegroundColor Cyan
 }
 
 if ($bfloat16) {
-    $pythonArgs = "$pythonArgs --use_bfloat16"
+    $exeArgs = "$exeArgs --use_bfloat16"
     Write-Host "BF16 mode enabled" -ForegroundColor Cyan
 }
 
 # Start a new PowerShell window, set the console title, and run the python module inside it.
-if ($pythonArgs) {
-    Write-Host "Starting new PowerShell window to run: $pythonPath -m skyrimnet-xtts $pythonArgs"
+if ($exeArgs) {
+    Write-Host "Starting new PowerShell window to run: $pythonPath -m skyrimnet-xtts $exeArgs"
 } else {
     Write-Host "Starting new PowerShell window to run: $pythonPath -m skyrimnet-xtts"
 }
 
 # Build the command to run inside the new PowerShell instance. Escape $Host so it's evaluated by the child PowerShell.
-$psCommand = "`$Host.UI.RawUI.WindowTitle = 'SkyrimNet XTTS'; & '$pythonPath' -m skyrimnet-xtts $pythonArgs"
+$psCommand = "`$Host.UI.RawUI.WindowTitle = 'SkyrimNet XTTS'; & '$exePath' $exeArgs"
 
 # Launch PowerShell in a new window and keep it open (-NoExit) so errors remain visible.
 $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoExit','-Command',$psCommand) -WorkingDirectory $scriptRoot -PassThru

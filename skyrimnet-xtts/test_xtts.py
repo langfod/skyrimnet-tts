@@ -4,9 +4,11 @@ SkyrimNet TTS Unified Application Entry Point
 Phase 3: Combined API and Gradio UI in a single application
 """
 
+import shutil
 import sys
 import os
 from pathlib import Path
+import traceback
 
 # Add current directory to Python path for relative imports
 current_dir = Path(__file__).parent
@@ -60,12 +62,14 @@ def initialize_configuration():
 
 
 
-def initialize_model(use_cpu=False):
+def initialize_model(use_cpu=False, use_deepspeed=False, use_bfloat16=False):
     """Initialize and load the TTS model using shared utility"""
     return initialize_model_with_cache(
         use_cpu=use_cpu,
         seed=20250527,
-        validate=True
+        validate=True,
+        use_deepspeed=use_deepspeed,
+        use_bfloat16=use_bfloat16
     )
 
 
@@ -101,6 +105,10 @@ if __name__ == "__main__":
         }
     }
     args = parse_api_args("SkyrimNet TTS Unified Application (API + Gradio UI)", extra_args)
+ 
+    speaker_embeddings_cache_dir = get_latent_dir("en")
+    if speaker_embeddings_cache_dir.exists():
+        shutil.rmtree(speaker_embeddings_cache_dir, ignore_errors=True)
     
     # Initialize application environment using shared utility
     initialize_application_environment("SkyrimNet TTS Unified Application")
@@ -113,7 +121,7 @@ if __name__ == "__main__":
     
     # Initialize model using shared utility
     try:
-        model = initialize_model(use_cpu=args.use_cpu)
+        model = initialize_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed, use_bfloat16=args.use_bfloat16)
     except Exception as e:
         logger.error(f"Model initialization failed: {e}")
         sys.exit(1)
@@ -134,7 +142,7 @@ if __name__ == "__main__":
     inference_kwargs['speed'] = 1.0
     inference_kwargs['repetition_penalty'] = 2.1
     try:
-        text="This is a test of the audio generation"
+        text="The Silver Bloods. They have a whole mine filled with prisoners to dig up silver ore, get smelted by workers they pay, and they own half the city."
         speaker_audio="malebrute"
         language="en"
         speaker_audio_uuid=None
@@ -150,6 +158,8 @@ if __name__ == "__main__":
         )
         logger.info(f"Audio generated and saved to: {wav_out_path}")
     except Exception as e:
+        traceback.print_exc()
+
         logger.error(f"Audio generation failed: {e}")
         sys.exit(1)
     except KeyboardInterrupt:

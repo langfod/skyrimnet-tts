@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Any, List
 from loguru import logger
+from COQUI_AI_TTS.tts.models.xtts import Xtts
 
 
 def get_model_device(model):
@@ -107,17 +108,6 @@ def get_cache_key(audio_path, uuid: int | None = None) -> Optional[str]:
         return None
 
     cache_prefix = Path(audio_path).stem
-    #if uuid is not None:
-    #    # Convert UUID to hex string for readability
-    #    try:
-    #        uuid_hex = hex(uuid)[2:]  # Remove '0x' prefix
-    #    except (TypeError, ValueError):
-    #        uuid_hex = str(uuid)
-#
-    #    cache_key = f"{cache_prefix}_{uuid_hex}"
-    #else:
-    #    cache_key = cache_prefix    
-    #return cache_key
     return cache_prefix
 
 
@@ -190,34 +180,34 @@ def _save_pt_to_disk(filename, data):
         logger.error(f"Failed to save data: {e}")
 
 
-def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audio_uuid: int = None, latents_only: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+def get_latent_from_audio(model:Xtts, language: str, speaker_audio: str, speaker_audio_uuid: int = None, latents_only: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
     """Get or compute and cache latents for a given speaker audio file."""
     if speaker_audio is None:
         return None, None
     
     cache_file_key = get_cache_key(speaker_audio, speaker_audio_uuid)
-    #logger.info(f"Fetching latents for {speaker_audio} with cache key {cache_file_key}")
-    # Check in-memory cache first
     cached = cache_manager.get(language, cache_file_key)
     if cached:
         logger.info(
             f"Using in-memory cached latents for {Path(speaker_audio).stem} with UUID {speaker_audio_uuid}")
-        return cached["gpt_cond_latent"], cached["speaker_embedding"]
+        gpt_cond_latent = cached["gpt_cond_latent"].to(dtype=model.gpt.dtype)
+        speaker_embedding = cached["speaker_embedding"].to(dtype=torch.float32)
+        return gpt_cond_latent, speaker_embedding
 
     # Check disk cache
-
     latent_dir = get_latent_dir(language=language)
     latent_filename = latent_dir.joinpath(f"{cache_file_key}.pt")
     if latent_filename.is_file():
         logger.info(f"Loading cached latents from {latent_filename}")
         latents = load_pt_latents(latent_filename, get_model_device(model))
+        latents["gpt_cond_latent"] = latents["gpt_cond_latent"].to(dtype=model.gpt.dtype)
+        latents["speaker_embedding"] = latents["speaker_embedding"].to(dtype=torch.float32)
         # Store in memory cache for future use
         if latents:
             cache_manager.set(language, cache_file_key, latents)
             return latents["gpt_cond_latent"], latents["speaker_embedding"]
         
     if not latents_only:
-        # Compute new latents
         logger.info(
             f"Computing latents for {speaker_audio} and caching to {latent_filename}")
         
@@ -235,24 +225,21 @@ def get_latent_from_audio(model, language: str, speaker_audio: str, speaker_audi
         else:
             raise TypeError(f"Unexpected return type from get_conditioning_latents: {type(latent_result)}")
         
-        #logger.info(f"latents shapes: gpt_cond_latent={gpt_cond_latent.shape}, speaker_embedding={speaker_embedding.shape}")
-
         latents = {"gpt_cond_latent": gpt_cond_latent,
                    "speaker_embedding": speaker_embedding}
 
-        # Save to disk asynchronously
         threading.Thread(
             target=_save_pt_to_disk,
             args=(latent_filename, latents),
             daemon=True
         ).start()
 
-        # Store in memory cache
         cache_manager.set(language, cache_file_key, latents)
         return gpt_cond_latent, speaker_embedding
     
     # This really should not happen, but just in case
     return None, None
+
 
 def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
     """Initialize latent cache from disk for all supported languages."""
@@ -266,7 +253,8 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
             try:
                 cached_latents[lang].append(filename.stem)
                 latents = load_pt_latents(filename, get_model_device(model))
-                #logger.info(f"Loaded latent shapes: gpt_cond_latent={latents['gpt_cond_latent'].shape}, speaker_embedding={latents['speaker_embedding'].shape}")
+                latents["gpt_cond_latent"] = latents["gpt_cond_latent"].to(dtype=model.gpt.dtype)
+                latents["speaker_embedding"] = latents["speaker_embedding"].to(dtype=torch.float32)
                 cache_manager.set(lang, filename.stem, latents)
             except Exception as e:
                 logger.error(f"Failed to load latents from {filename}: {e}")
@@ -301,10 +289,11 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
                     json_path = files['.json']
                     logger.info(f"Loading legacy JSON latents from: {json_path}")
                     
-                    # Load JSON latents
                     latents = load_json_latents(json_path, get_model_device(model))
+                    # Convert to correct dtypes
+                    latents["gpt_cond_latent"] = latents["gpt_cond_latent"].to(dtype=model.gpt.dtype)
+                    latents["speaker_embedding"] = latents["speaker_embedding"].to(dtype=torch.float32)
                     
-                    # Save as .pt file for future use
                     pt_filename = latent_dir.joinpath(f"{base_name}.pt")
                     threading.Thread(
                         target=_save_pt_to_disk,
@@ -313,10 +302,11 @@ def init_latent_cache(model, supported_languages: List[str] = ["en"]) -> None:
                     ).start()
                     logger.info(f"Converting JSON latents to .pt format: {pt_filename}")
                     
-                    # Store in memory cache
                     cache_manager.set(lang, base_name, latents)
                     
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 logger.error(f"Failed to load latents for speaker {base_name}: {e}")
 
     stats = cache_manager.get_stats()
@@ -341,7 +331,6 @@ def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid: int = None) -> Path:
     """Save a tensor as a WAV file using torchaudio"""
 
     if wav_tensor.device.type != 'cpu':
-        #logger.debug(f"Converting tensor from {wav_tensor.device} to CPU for audio saving")
         wav_tensor = wav_tensor.cpu()
 
     formatted_now_time = datetime.now().strftime("%Y%m%d_%H%M%S")

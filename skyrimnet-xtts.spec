@@ -136,6 +136,13 @@ datas += collect_data_files("torch", excludes=[
     # because collect_data_files() doesn't reliably exclude binary dependencies
 ])
 
+datas += collect_data_files("deepspeed", excludes=[
+    "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
+    "test*", "*test*", "tests/*", "*/tests/*",
+    "example*", "*example*", "examples/*", "*/examples/*",
+    "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*",
+])
+
 datas += collect_data_files("torchaudio", excludes=[
     "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
     "test*", "*test*", "tests/*", "*/tests/*",
@@ -200,6 +207,8 @@ hiddenimports += [
 # Essential PyTorch modules only
 hiddenimports += collect_submodules('torch.nn.functional')
 
+hiddenimports += collect_submodules('deepspeed')
+
 # Fix torch._dynamo import issues (keep minimal)
 hiddenimports += collect_submodules('torch._dynamo.polyfills')
 
@@ -244,7 +253,7 @@ if "ja" in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS:
 # Fix specific import errors (minimal set)
 hiddenimports += [
     'torch._dynamo.polyfills.fx',
-    'transformers.generation.utils.GenerationMixin',
+    'deepspeed',
 ]
 
 # =============================================================================
@@ -253,7 +262,7 @@ hiddenimports += [
 
 excludedimports = [
     'ninja',
-    'torch.utils.cpp_extension',
+    #'torch.utils.cpp_extension',
     # Exclude unsupported language modules for spaCy (based on XTTS v2 supported languages)
     # Supported by TTS: en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh-cn, hu, ko, ja, hi
     # CRITICAL: Do NOT exclude languages that TTS actually uses: en, es, ar, hi, ja, zh
@@ -339,6 +348,7 @@ a = Analysis(
         'skyrimnet-xtts.COQUI_AI_TTS.vocoder.layers': 'py+pyz',
         'gradio': 'py+pyz',
         'torch': 'py+pyz',
+        'deepspeed': 'py+pyz',
     },
     cipher=None,
     upx=True,

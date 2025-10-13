@@ -325,7 +325,7 @@ if __name__ == "__main__":
     initialize_application_environment("XTTS Text-to-Speech Application with Gradio Interface")
     
     # Load model with standardized initialization
-    CURRENT_MODEL = initialize_model_with_cache(use_cpu=args.use_cpu)
+    CURRENT_MODEL = initialize_model_with_cache(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed, use_bfloat16=args.use_bfloat16)
 
     # Test audio generation
     #Warmup
