@@ -32,7 +32,7 @@ if (-not $nobuild -or $noclean) {
         if (Test-Path "__pycache__") {
             Remove-Item -Path "__pycache__" -Recurse -Force
         }
-        & pyinstaller --clean --noconfirm --log-level=WARN skyrimnet-xtts.spec
+        & pyinstaller --clean --noconfirm --log-level=ERROR skyrimnet-xtts.spec
     }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Build failed. Exiting."
@@ -52,11 +52,12 @@ if ($test) {
     Copy-Item -Path "speakers" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
     Copy-Item -Path "assets" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
     Copy-Item -Path "skyrimnet_config.txt" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
-    Copy-Item -Path "examples\Start_XTTS.bat" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
+    Copy-Item -Path "examples\Start.bat" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
+    Copy-Item -Path "examples\Start_XTTS.ps1" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
+
 
     Set-Location -Path ./dist/skyrimnet-xtts
-    #& ./Start_XTTS.bat -server "localhost" -port 7860
-    & ./skyrimnet-xtts.exe 
+    & ./Start.bat -server "localhost" -port 7860
     Set-Location -Path ../..
 }
 else {
@@ -71,11 +72,15 @@ else {
     }
     New-Item -ItemType Directory -Path "archive/$PACKAGE_NAME" -Force
     New-Item -ItemType Directory -Path "archive/$PACKAGE_NAME/assets" -Force
-    
-    Copy-Item -Path "speakers" -Destination "archive/$PACKAGE_NAME\" -Force -Recurse
+
+    Get-ChildItem -Path "speakers" -Directory | Copy-Item -Destination "archive/$PACKAGE_NAME/speakers" 
+
+    Copy-Item -Path "speakers\en\malebrute.wav" -Destination "archive/$PACKAGE_NAME/speakers/en\" -Force -Recurse
+    Copy-Item -Path "speakers\en\malecommoner.wav" -Destination "archive/$PACKAGE_NAME/speakers/en\" -Force -Recurse
     Copy-Item -Path "assets\silence_100ms.wav" -Destination "archive/$PACKAGE_NAME/assets\" -Force -Recurse
     Copy-Item -Path "skyrimnet_config.txt" -Destination "archive/$PACKAGE_NAME\" -Force 
-    Copy-Item -Path "examples\Start_XTTS.bat" -Destination "archive/$PACKAGE_NAME\" -Force
+    Copy-Item -Path "examples\Start.bat" -Destination "archive/$PACKAGE_NAME\" -Force
+    Copy-Item -Path "examples\Start_XTTS.ps1" -Destination "archive/$PACKAGE_NAME\" -Force
     Copy-Item -Path "dist\skyrimnet-xtts\skyrimnet-xtts.exe" -Destination "archive/$PACKAGE_NAME\" -Force
     Copy-Item -Path "dist\skyrimnet-xtts\_internal" -Destination "archive/$PACKAGE_NAME\" -Force -Recurse
 

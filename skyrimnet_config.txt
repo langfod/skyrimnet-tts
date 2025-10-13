@@ -35,9 +35,9 @@ speed = default
 
 # Examples of custom values (advanced users):
 # temperature = 0.9
-# top_p = 0.8
+# top_p = 1.0
 # top_k: int = 50
-# repetition_penalty = 1.5
+# repetition_penalty = 2.1
 
 
 #####################################################################

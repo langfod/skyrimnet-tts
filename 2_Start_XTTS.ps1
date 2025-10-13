@@ -29,6 +29,8 @@ Notes:
 
 param(
     [switch]$cpu,
+    [switch]$deepspeed,
+    [switch]$bfloat16,
     [string]$server = "0.0.0.0",
     [int]$port = 7860
 )
@@ -81,7 +83,7 @@ Clear-Host
 Show-Banner
 
 
-Write-Host "`nAttempting to start SkyrimNet ChatterBox..." -ForegroundColor Green
+Write-Host "`nAttempting to start SkyrimNet XTTS..." -ForegroundColor Green
 
 # Locate python to run the project. Prefer venv python if present.
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -115,6 +117,16 @@ $pythonArgs = "--server $server --port $port"
 if ($cpu) {
     $pythonArgs = "$pythonArgs --use_cpu"
     Write-Host "CPU mode enabled" -ForegroundColor Cyan
+}
+
+if ($deepspeed) {
+    $pythonArgs = "$pythonArgs --deepspeed"
+    Write-Host "DeepSpeed mode enabled" -ForegroundColor Cyan
+}
+
+if ($bfloat16) {
+    $pythonArgs = "$pythonArgs --use_bfloat16"
+    Write-Host "BF16 mode enabled" -ForegroundColor Cyan
 }
 
 # Start a new PowerShell window, set the console title, and run the python module inside it.

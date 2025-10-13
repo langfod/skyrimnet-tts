@@ -47,7 +47,7 @@ _CONFIG_FILE_PATH = "skyrimnet_config.txt"
 # Testing flag - when True, bypasses config loading and uses all API values
 _USE_API_MODE = False
 _FROM_GRADIO = False
-STREAM = True
+STREAM = False
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
@@ -256,7 +256,7 @@ def build_interface():
             with gr.Column():
                 gr.Markdown("## Conditioning Parameters")
                 temperature = gr.Slider(0, 2, value=1, step=0.01, label="Temperature")
-                repetition_penalty = gr.Slider(1, 3, value=2, step=0.1, label="Repetition Penalty")
+                repetition_penalty = gr.Slider(1, 3, value=2.1, step=0.1, label="Repetition Penalty")
                 top_k = gr.Slider(1, 100, value=50, step=1, label="Top-K", precision=0)
                 top_p = gr.Slider(0, 1, value=1, step=0.01, label="Top-P")
                 speed = gr.Slider(0.5, 2, value=1.0, step=0.01, label="Speed")
@@ -325,7 +325,7 @@ if __name__ == "__main__":
     initialize_application_environment("XTTS Text-to-Speech Application with Gradio Interface")
     
     # Load model with standardized initialization
-    CURRENT_MODEL = initialize_model_with_cache(use_cpu=args.use_cpu)
+    CURRENT_MODEL = initialize_model_with_cache(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed, use_bfloat16=args.use_bfloat16)
 
     # Test audio generation
     #Warmup

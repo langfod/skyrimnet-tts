@@ -8,23 +8,28 @@ import torch
 from loguru import logger
 from typing import Optional, Any
 
-# TTS imports
-from TTS.utils.manage import ModelManager
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import Xtts
+# Local imports - Use absolute imports from the package
+import os
+import sys
 
-# Local imports for cache initialization - Handle both direct and module execution
-try:
-    from .shared_config import SUPPORTED_LANGUAGE_CODES
-except ImportError:
-    from shared_config import SUPPORTED_LANGUAGE_CODES
+# Add current package directory to Python path if needed
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# TTS imports - Now these will work consistently
+from COQUI_AI_TTS.utils.manage import ModelManager
+from COQUI_AI_TTS.tts.configs.xtts_config import XttsConfig
+from COQUI_AI_TTS.tts.models.xtts import Xtts
+from shared_config import SUPPORTED_LANGUAGE_CODES
+from shared_cache_utils import init_latent_cache
 
 
 # =============================================================================
 # MODEL LOADING AND MANAGEMENT
 # =============================================================================
 
-def load_model(model_name="xtts_v2", use_cpu=False):
+def load_model(model_name="xtts_v2", use_cpu=False, use_deepspeed=False, use_bfloat16=False):
     """
     Load XTTS model with configuration
     
@@ -41,24 +46,30 @@ def load_model(model_name="xtts_v2", use_cpu=False):
     logger.info(f"Loading model: {model_name}, use_cpu: {use_cpu}")
     
     try:
-        # Download/locate model files
-        output_model_path, output_config_path, model_item = ModelManager(progress_bar=True).download_model(model_name)
+        # Use local model path instead of downloading
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        local_model_path = os.path.join(project_root, "models", "tts", f"tts_models--multilingual--multi-dataset--{model_name}")
         
-        # Load configuration
-        config = XttsConfig()
-        config.load_json(output_config_path)
+        if os.path.exists(local_model_path):
+            output_model_path = local_model_path
+            output_config_path = os.path.join(local_model_path, "config.json")
+            logger.info(f"Using local model path: {output_model_path}")
+        else:
+            # Fallback to download if local doesn't exist
+            output_model_path, output_config_path, model_item = ModelManager(progress_bar=True).download_model(model_name)
         
-        # Initialize model
+        config = XttsConfig.load_from_json(output_config_path)
+        
         model = Xtts.init_from_config(config)
         
-        # Load checkpoint and set device
         if use_cpu:
             model.load_checkpoint(config, checkpoint_dir=output_model_path)
             model.cpu()
             logger.info("Model loaded on CPU")
 
         else:
-            model.load_checkpoint(config, checkpoint_dir=output_model_path)
+            model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
             model.cuda()
             logger.info("Model loaded on CUDA")
         
@@ -67,7 +78,7 @@ def load_model(model_name="xtts_v2", use_cpu=False):
         
     except Exception as e:
         import traceback
-        traceback.print_stack()
+        traceback.print_exc()
         logger.error(f"Failed to load model '{model_name}': {str(e)}")
         raise
 
@@ -198,7 +209,9 @@ def prepare_inference_params(temperature=0.7, top_p=1.0, top_k=50, speed=1.0,
 def initialize_model_with_cache(
     use_cpu: bool = False, 
     seed: Optional[int] = None,
-    validate: bool = True
+    validate: bool = True,
+    use_deepspeed: bool = False,
+    use_bfloat16: bool = False
 ) -> Any:
     """
     Complete model initialization with caching setup.
@@ -217,20 +230,14 @@ def initialize_model_with_cache(
     logger.info("Starting model initialization...")
     
     try:
-        # Load model
-        model = load_model(use_cpu=use_cpu)
-        
+        print(f"Loading model... DeepSpeed: {use_deepspeed}, bfloat16: {use_bfloat16}")
+        model = load_model(use_cpu=use_cpu, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
+
         setup_model_seed(seed)
         
-        # Validate model state
         if validate:
             validate_model_state(model)
         
-        # Initialize latent cache import here to avoid circular imports
-        try:
-            from .shared_cache_utils import init_latent_cache  
-        except ImportError:
-            from shared_cache_utils import init_latent_cache
         init_latent_cache(model=model, supported_languages=SUPPORTED_LANGUAGE_CODES)
         
         return model
