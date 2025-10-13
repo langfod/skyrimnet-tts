@@ -1153,17 +1153,6 @@ if __name__ == "__main__":
         cc_mode=args.cc_mode,
     )
 
-    normalizer = TextNorm(
-        to_banjiao=args.to_banjiao,
-        to_upper=args.to_upper,
-        to_lower=args.to_lower,
-        remove_fillers=args.remove_fillers,
-        remove_erhua=args.remove_erhua,
-        check_chars=args.check_chars,
-        remove_space=args.remove_space,
-        cc_mode=args.cc_mode,
-    )
-
     ndone = 0
     with open(args.ifile, encoding="utf8") as istream, open(args.ofile, "w+", encoding="utf8") as ostream:
         if args.format == "tsv":

@@ -147,6 +147,7 @@ if __name__ == "__main__":
         language="en"
         speaker_audio_uuid=None
         #print(wav)
+
         wav_out_path = generate_audio_file(
         model=model,
         language=language,
@@ -156,6 +157,18 @@ if __name__ == "__main__":
         stream=True,
         **inference_kwargs
         )
+
+        wav_out_path = generate_audio_file(
+        model=model,
+        language=language,
+        speaker_wav=speaker_audio,
+        text=text,
+        uuid=speaker_audio_uuid,
+        stream=True,
+        **inference_kwargs
+        )
+        
+
         logger.info(f"Audio generated and saved to: {wav_out_path}")
     except Exception as e:
         traceback.print_exc()

@@ -168,7 +168,7 @@ class BaseCharacters:
 
             is_unique (bool):
                 Remove duplicates from the provided characters. Defaults to True.
-    el
+
             is_sorted (bool):
                 Sort the characters in alphabetical order. Only applies to `self.characters`. Defaults to True.
     """

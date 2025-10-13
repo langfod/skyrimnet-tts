@@ -6,11 +6,6 @@ torchaudio
 https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'
 deepspeed ; sys_platform != 'win32'
 
-
-#triton-windows; sys_platform == 'win32' # tw
-#triton ; sys_platform != 'win32'  # tn
-
-
 setuptools<81
 cupy-cuda12x
 pytorch-pfn-extras                # Optional: CuPy-PyTorch memory pool integration

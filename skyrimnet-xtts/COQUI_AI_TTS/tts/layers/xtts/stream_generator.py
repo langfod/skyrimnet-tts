@@ -139,7 +139,9 @@ class NewGenerationMixin(GenerationMixin):
             generation_config, use_model_defaults, **kwargs
         )
         self._validate_model_kwargs(model_kwargs.copy())
-        self._validate_assistant(assistant_model, tokenizer, assistant_tokenizer)
+        # Conditionally validate assistant if method exists (may not be available in all transformers versions)
+        if hasattr(self, '_validate_assistant'):
+            self._validate_assistant(assistant_model, tokenizer, assistant_tokenizer)
 
         # 2. Set generation parameters if not already defined
         logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
@@ -224,9 +226,18 @@ class NewGenerationMixin(GenerationMixin):
             and not self.config.is_encoder_decoder
         ):
             max_cache_length += inputs_tensor.shape[1]
-        self._prepare_cache_for_generation(
-            generation_config, model_kwargs, assistant_model, batch_size, max_cache_length, device=device
-        )
+        
+        # Check if _prepare_cache_for_generation accepts device parameter (transformers version compatibility)
+        cache_method = self._prepare_cache_for_generation
+        cache_sig = inspect.signature(cache_method)
+        if 'device' in cache_sig.parameters:
+            self._prepare_cache_for_generation(
+                generation_config, model_kwargs, assistant_model, batch_size, max_cache_length, device=device
+            )
+        else:
+            self._prepare_cache_for_generation(
+                generation_config, model_kwargs, assistant_model, batch_size, max_cache_length
+            )
 
         if self.device.type != input_ids.device.type:
             warnings.warn(
@@ -249,8 +260,18 @@ class NewGenerationMixin(GenerationMixin):
             device=inputs_tensor.device,
             model_kwargs=model_kwargs,
         )
+        
+        # Filter kwargs to only pass those accepted by _get_stopping_criteria (transformers version compatibility)
+        stopping_criteria_sig = inspect.signature(self._get_stopping_criteria)
+        stopping_criteria_kwargs = {
+            k: v for k, v in kwargs.items() 
+            if k in stopping_criteria_sig.parameters
+        }
         prepared_stopping_criteria = self._get_stopping_criteria(
-            generation_config=generation_config, stopping_criteria=stopping_criteria, tokenizer=tokenizer, **kwargs
+            generation_config=generation_config, 
+            stopping_criteria=stopping_criteria, 
+            tokenizer=tokenizer, 
+            **stopping_criteria_kwargs
         )
 
         # Set model_kwargs `use_cache` so we can use it later in forward runs
@@ -396,6 +417,11 @@ class NewGenerationMixin(GenerationMixin):
         while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            # Remove any output control arguments that might be in model_inputs to avoid duplication
+            model_inputs.pop('output_attentions', None)
+            model_inputs.pop('output_hidden_states', None)
+            model_inputs.pop('return_dict', None)
 
             # forward pass to get next token
             outputs = self(

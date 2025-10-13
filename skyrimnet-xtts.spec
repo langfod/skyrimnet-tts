@@ -229,7 +229,7 @@ hiddenimports += [
 # Language processing modules (only essential)
 hiddenimports += [
     'unidic_lite', 
-    'fugashi'
+    'fugashi',
     'jamo',
     'jaraco',
     'setuptools',

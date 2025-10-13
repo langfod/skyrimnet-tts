@@ -9,7 +9,7 @@ from COQUI_AI_TTS.tts.layers.xtts.stream_generator import StreamGenerationConfig
 class GPT2InferenceModel(GPT2PreTrainedModel, GenerationMixin):
     """Override GPT2LMHeadModel to allow for prefix conditioning."""
 
-    def __init__(self, config, gpt, pos_emb, embeddings, norm, linear, kv_cache):
+    def __init__(self, config, gpt, pos_emb, embeddings, norm, linear, kv_cache, use_bfloat16=False):
         super().__init__(config)
         self.transformer = gpt
         self.pos_embedding = pos_emb
@@ -17,6 +17,7 @@ class GPT2InferenceModel(GPT2PreTrainedModel, GenerationMixin):
         self.final_norm = norm
         self.lm_head = nn.Sequential(norm, linear)
         self.kv_cache = kv_cache
+        self.use_bfloat16 = use_bfloat16
         self.generation_config = StreamGenerationConfig.from_model_config(config) if self.can_generate() else None
 
     def store_prefix_emb(self, prefix_emb):

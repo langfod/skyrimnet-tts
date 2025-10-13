@@ -173,9 +173,7 @@ class GPT(nn.Module):
                 model_prep = self.gpt_inference.to(dtype) if use_bfloat16 else self.gpt_inference.half()
                 self.ds_engine = deepspeed.init_inference(
                     model=model_prep,  # Transformers models
-                    mp_size=1,  # Number of GPU
                     dtype=dtype,  # desired data type of output
-                    replace_method="auto",  # Lets DS autotically identify the layer to replace
                     replace_with_kernel_inject=True,  # replace the model with the kernel injector
                 )
                 self.gpt_inference = self.ds_engine.module.eval()
