@@ -45,7 +45,7 @@ import os
 import spacy
 
 MODEL_SUPPORTED_LANGS = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "hu", "ko", "ja"] # Supported languages from XTTS v2 model config.json
-SPACY_REQUIRED_LANGS = ['ar','en','es','hi','ja','zh'] 
+SPACY_REQUIRED_LANGS = ['ar','en','es','hi','ja','zh','ko','vi','th'] 
 
 required_langs = SPACY_REQUIRED_LANGS #MODEL_SUPPORTED_LANGS + SPACY_REQUIRED_LANGS
 required_langs = [lang.split("-")[0] for lang in required_langs]  # Normalize to primary language codes
@@ -326,14 +326,14 @@ excludedimports = [
     'spacy.lang.sv',   # Swedish
     'spacy.lang.ta',   # Tamil
     'spacy.lang.te',   # Telugu
-    'spacy.lang.th',   # Thai
+    #'spacy.lang.th',   # Thai
     'spacy.lang.ti',   # Tigrinya
     'spacy.lang.tl',   # Tagalog
     'spacy.lang.tn',   # Tswana
     'spacy.lang.tt',   # Tatar
     'spacy.lang.uk',   # Ukrainian
     'spacy.lang.ur',   # Urdu
-    'spacy.lang.vi',   # Vietnamese
+    #'spacy.lang.vi',   # Vietnamese
     'spacy.lang.yo',   # Yoruba
 ]
 
