@@ -45,9 +45,9 @@ import os
 import spacy
 
 MODEL_SUPPORTED_LANGS = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "hu", "ko", "ja"] # Supported languages from XTTS v2 model config.json
-SPACY_REQUIRED_LANGS = ['ko', 'vi', 'th'] 
+SPACY_REQUIRED_LANGS = ['ar','en','es','hi','ja','zh'] 
 
-required_langs = MODEL_SUPPORTED_LANGS + SPACY_REQUIRED_LANGS
+required_langs = SPACY_REQUIRED_LANGS #MODEL_SUPPORTED_LANGS + SPACY_REQUIRED_LANGS
 required_langs = [lang.split("-")[0] for lang in required_langs]  # Normalize to primary language codes
 required_langs = list(set(required_langs))  # Remove duplicates
 spacy_lang_path = os.path.join(os.path.dirname(spacy.__file__), 'lang')
@@ -202,14 +202,11 @@ except Exception as e:
 
 # CRITICAL: Explicit spaCy language modules needed by TTS tokenizer
 hiddenimports += [
+    'spacy.lang.ar',
     'spacy.lang.en',
     'spacy.lang.es', 
-    'spacy.lang.ar',
     'spacy.lang.hi',
     'spacy.lang.ja',
-    'spacy.lang.ko',
-    'spacy.lang.vi',
-    'spacy.lang.th',
     'spacy.lang.zh',
 
 ]
@@ -329,16 +326,15 @@ excludedimports = [
     'spacy.lang.sv',   # Swedish
     'spacy.lang.ta',   # Tamil
     'spacy.lang.te',   # Telugu
-    #'spacy.lang.th',   # Thai
+    'spacy.lang.th',   # Thai
     'spacy.lang.ti',   # Tigrinya
     'spacy.lang.tl',   # Tagalog
     'spacy.lang.tn',   # Tswana
     'spacy.lang.tt',   # Tatar
     'spacy.lang.uk',   # Ukrainian
     'spacy.lang.ur',   # Urdu
-    #'spacy.lang.vi',   # Vietnamese
+    'spacy.lang.vi',   # Vietnamese
     'spacy.lang.yo',   # Yoruba
-    # NOTE: spacy.lang.zh is NOT excluded because TTS needs it for Chinese support; th and vi are by spacy lang internals
 ]
 
 # =============================================================================

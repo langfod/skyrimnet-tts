@@ -522,14 +522,15 @@ class Xtts(BaseTTS):
         elif speaker_embedding.dim() == 3 and speaker_embedding.shape[-1] != 1:
             speaker_embedding = speaker_embedding[..., :1]  # Take first time step
         if enable_text_splitting:
-            text = split_sentence(text, language, self.tokenizer.char_limits[language])
+            text = split_sentence(text, language, min(self.tokenizer.char_limits[language], 235)) # seeing oddities with 250 limit
         else:
             text = [text]
 
         wavs = []
         gpt_latents_list = []
         for sent in text:
-            sent = sent.strip().lower()
+            sent = sent.strip()#.lower()
+            #print(sent)
             text_tokens = torch.IntTensor(self.tokenizer.encode(sent, lang=language)).unsqueeze(0).to(self.device)
 
             assert text_tokens.shape[-1] < self.args.gpt_max_text_tokens, (
