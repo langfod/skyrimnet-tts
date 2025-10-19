@@ -93,6 +93,13 @@ datas += collect_data_files("jamo", excludes=[
     "test*", "*test*", "*.md", "*.txt", "*.rst"
 ])
 
+datas += collect_data_files("hangul_romanize", excludes=[
+    "test*", "*test*", "*.md", "*.txt", "*.rst"
+])
+
+datas += collect_data_files("cutlet", excludes=[
+    "test*", "*test*", "*.md", "*.txt", "*.rst"
+])
 
 
 # CRITICAL: Only include essential CuPy components (if available)
