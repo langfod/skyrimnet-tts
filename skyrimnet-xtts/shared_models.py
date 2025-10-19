@@ -24,12 +24,13 @@ from COQUI_AI_TTS.tts.models.xtts import Xtts
 from shared_config import SUPPORTED_LANGUAGE_CODES
 from shared_cache_utils import init_latent_cache
 
-
+MODEL_NAME_DEFAULT = "xtts_v2"
+#MODEL_NAME_DEFAULT = "AstraMindAI/xtts2-gpt"
 # =============================================================================
 # MODEL LOADING AND MANAGEMENT
 # =============================================================================
 
-def load_model(model_name="xtts_v2", use_cpu=False, use_deepspeed=False, use_bfloat16=False):
+def load_model(model_name=MODEL_NAME_DEFAULT, use_cpu=False, use_deepspeed=False, use_bfloat16=False) -> Xtts:
     """
     Load XTTS model with configuration
     

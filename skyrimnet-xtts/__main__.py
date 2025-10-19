@@ -20,7 +20,6 @@ from gradio.routes import mount_gradio_app
 # Import shared modules - Handle both direct execution and module execution
 try:
     # Try relative imports first (for module execution: python -m skyrimnet-xtts)
-    from .shared_config import SUPPORTED_LANGUAGE_CODES
     from .shared_args import parse_api_args
     from .shared_app_utils import setup_application_logging, initialize_application_environment
     from .shared_models import initialize_model_with_cache
@@ -30,7 +29,6 @@ try:
     from . import skyrimnet_xtts as skyrimnet_gradio
 except ImportError:
     # Fall back to absolute imports (for direct execution or PyInstaller)
-    from shared_config import SUPPORTED_LANGUAGE_CODES
     from shared_args import parse_api_args
     from shared_app_utils import setup_application_logging, initialize_application_environment
     from shared_models import initialize_model_with_cache

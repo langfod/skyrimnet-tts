@@ -45,9 +45,9 @@ import os
 import spacy
 
 MODEL_SUPPORTED_LANGS = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "hu", "ko", "ja"] # Supported languages from XTTS v2 model config.json
-SPACY_REQUIRED_LANGS = ['ko', 'vi', 'th'] 
+SPACY_REQUIRED_LANGS = ['ar','en','es','hi','ja','zh'] 
 
-required_langs = MODEL_SUPPORTED_LANGS + SPACY_REQUIRED_LANGS
+required_langs = SPACY_REQUIRED_LANGS #MODEL_SUPPORTED_LANGS + SPACY_REQUIRED_LANGS
 required_langs = [lang.split("-")[0] for lang in required_langs]  # Normalize to primary language codes
 required_langs = list(set(required_langs))  # Remove duplicates
 spacy_lang_path = os.path.join(os.path.dirname(spacy.__file__), 'lang')
@@ -86,9 +86,9 @@ datas += collect_data_files("setuptools", excludes=[
     "docs/*", "*/docs/*"
 ])
 
-#datas += collect_data_files("unidic_lite", excludes=[
-#    "test*", "*test*", "*.md", "*.txt", "*.rst"
-#])
+datas += collect_data_files("unidic_lite", excludes=[
+    "test*", "*test*", "*.md", "*.txt", "*.rst"
+])
 datas += collect_data_files("jamo", excludes=[
     "test*", "*test*", "*.md", "*.txt", "*.rst"
 ])
@@ -163,6 +163,16 @@ datas += collect_data_files("transformers", excludes=[
     "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*"
 ])
 
+# CRITICAL: Include Triton backend data files (driver.py and other backend modules)
+# Exclude AMD backend entirely - we only need NVIDIA CUDA backend
+datas += collect_data_files("triton", excludes=[
+    "test*", "*test*", "tests/*", "*/tests/*",
+    "example*", "*example*", "examples/*", "*/examples/*",
+    "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*",
+    "backends/amd/*",  # Exclude AMD backend
+    "backends/amd"
+])
+
 # =============================================================================
 # OPTIMIZED HIDDEN IMPORTS (Keep original structure but reduce scope)
 # =============================================================================
@@ -192,14 +202,11 @@ except Exception as e:
 
 # CRITICAL: Explicit spaCy language modules needed by TTS tokenizer
 hiddenimports += [
+    'spacy.lang.ar',
     'spacy.lang.en',
     'spacy.lang.es', 
-    'spacy.lang.ar',
     'spacy.lang.hi',
     'spacy.lang.ja',
-    'spacy.lang.ko',
-    'spacy.lang.vi',
-    'spacy.lang.th',
     'spacy.lang.zh',
 
 ]
@@ -253,6 +260,12 @@ if "ja" in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS:
 # Fix specific import errors (minimal set)
 hiddenimports += [
     'torch._dynamo.polyfills.fx',
+    "triton",
+    "triton.compiler",
+    "triton.tools",
+    "triton.language",
+    "triton.backends.nvidia",
+    "triton.backends.nvidia.driver",
     'deepspeed',
 ]
 
@@ -263,6 +276,8 @@ hiddenimports += [
 excludedimports = [
     'ninja',
     #'torch.utils.cpp_extension',
+    # Exclude AMD backend (we only use NVIDIA CUDA)
+    'triton.backends.amd',
     # Exclude unsupported language modules for spaCy (based on XTTS v2 supported languages)
     # Supported by TTS: en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh-cn, hu, ko, ja, hi
     # CRITICAL: Do NOT exclude languages that TTS actually uses: en, es, ar, hi, ja, zh
@@ -311,16 +326,15 @@ excludedimports = [
     'spacy.lang.sv',   # Swedish
     'spacy.lang.ta',   # Tamil
     'spacy.lang.te',   # Telugu
-    #'spacy.lang.th',   # Thai
+    'spacy.lang.th',   # Thai
     'spacy.lang.ti',   # Tigrinya
     'spacy.lang.tl',   # Tagalog
     'spacy.lang.tn',   # Tswana
     'spacy.lang.tt',   # Tatar
     'spacy.lang.uk',   # Ukrainian
     'spacy.lang.ur',   # Urdu
-    #'spacy.lang.vi',   # Vietnamese
+    'spacy.lang.vi',   # Vietnamese
     'spacy.lang.yo',   # Yoruba
-    # NOTE: spacy.lang.zh is NOT excluded because TTS needs it for Chinese support; th and vi are by spacy lang internals
 ]
 
 # =============================================================================
