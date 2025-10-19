@@ -1,9 +1,10 @@
 --extra-index-url=https://download.pytorch.org/whl/cu129
 torch<2.9
 torchaudio
-
 # Windows deepseed build
+triton-windows<3.4 ; sys_platform == 'win32'
 https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'
+triton<3.4 ; sys_platform != 'win32'
 deepspeed ; sys_platform != 'win32'
 
 setuptools<81
@@ -26,9 +27,11 @@ gradio
 # Text processing libraries for various languages
 pypinyin           # Chinese pinyin conversion
 jamo               # Korean character processing
+hangul_romanize    # Korean romanization
+
 fugashi            # Japanese tokenizer
 unidic-lite        # Japanese dictionary for fugashi
-
+cutlet             # Japanese text segmentation
 soundfile          # Audio file I/O
 scipy              # Scientific computing (signal processing)
 

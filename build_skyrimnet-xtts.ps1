@@ -96,5 +96,4 @@ else {
         Set-Location -Path ./archive
         & "C:\Program Files\7-Zip\7z.exe" a -t7z "$archiveName.7z" "$PACKAGE_NAME" -mx=9
     }
-    Set-Location -Path ..
 }
