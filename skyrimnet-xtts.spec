@@ -180,6 +180,45 @@ datas += collect_data_files("triton", excludes=[
     "backends/amd"
 ])
 
+# CRITICAL: Include Python development headers for Triton JIT compilation
+import sys
+import sysconfig
+from pathlib import Path
+
+# Get Python installation paths
+python_base = Path(sys.base_prefix)
+python_include = Path(sysconfig.get_path('include'))
+python_stdlib = Path(sysconfig.get_path('stdlib'))
+
+# Include Python headers (Python.h and related files)
+if python_include.exists():
+    for header_file in python_include.rglob('*.h'):
+        rel_path = header_file.relative_to(python_include)
+        datas.append((str(header_file), f'include/{rel_path.parent}'))
+    print(f"Added Python headers from: {python_include}")
+
+# Include Python libs directory (python3X.lib for linking)
+python_libs = python_base / 'libs'
+if python_libs.exists():
+    for lib_file in python_libs.glob('*.lib'):
+        datas.append((str(lib_file), 'libs'))
+    print(f"Added Python libs from: {python_libs}")
+
+# Include essential distutils files (needed for compilation)
+try:
+    datas += collect_data_files("distutils", excludes=[
+        "test*", "*test*", "tests/*", "*/tests/*",
+        "example*", "*example*", "examples/*", "*/examples/*"
+    ])
+except:
+    # distutils might be built-in, try setuptools._distutils
+    try:
+        datas += collect_data_files("setuptools._distutils", excludes=[
+            "test*", "*test*", "tests/*", "*/tests/*"
+        ])
+    except:
+        pass
+
 # =============================================================================
 # OPTIMIZED HIDDEN IMPORTS (Keep original structure but reduce scope)
 # =============================================================================
@@ -274,6 +313,20 @@ hiddenimports += [
     "triton.backends.nvidia",
     "triton.backends.nvidia.driver",
     'deepspeed',
+]
+
+# CRITICAL: Include compilation modules for Triton JIT
+hiddenimports += [
+    'distutils',
+    'distutils.util',
+    'distutils.spawn',
+    'distutils.version',
+    'setuptools._distutils',
+    'sysconfig',
+    'subprocess',
+    'tempfile',
+    # Platform-specific compilation support
+    'msvcrt',  # Windows-specific
 ]
 
 # =============================================================================
