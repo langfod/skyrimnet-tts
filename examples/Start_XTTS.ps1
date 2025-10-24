@@ -76,16 +76,27 @@ function Any_Key_Wait {
     While ( !([Console]::KeyAvailable) -And ($secondsRunning -gt 0)) {
         Start-Sleep -Seconds 1;
         Write-Host “$secondsRunning..” -NoNewLine; $secondsRunning--
+    }
 }
 
-}
+
 Clear-Host
 Show-Banner
 
 
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
+cmd.exe /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat`" && set > %temp%\vcvars.txt"
+
+
+Get-Content "$env:temp\vcvars.txt" | Foreach-Object {
+  if ($_ -match "^(.*?)=(.*)$") {
+    Set-Content "env:\$($matches[1])" $matches[2]
+  }
+}
+
 Write-Host "`nAttempting to start SkyrimNet XTTS..." -ForegroundColor Green
 
-# Locate python to run the project. Prefer venv python if present.
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $exePath = Join-Path $scriptRoot 'skyrimnet-xtts.exe'
 
