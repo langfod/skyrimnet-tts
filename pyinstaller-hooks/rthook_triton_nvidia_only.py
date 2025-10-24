@@ -1,30 +1,46 @@
-# Runtime hook to restrict Triton to NVIDIA backends only
-# This prevents FileNotFoundError when Triton tries to discover AMD backends
+"""
+PyInstaller runtime hook to enable Triton JIT compilation in frozen environment.
 
-import sys
+This sets up the necessary environment for Triton to compile CUDA kernels
+at runtime, including Python headers and compilation paths.
+"""
 import os
+import sys
+from pathlib import Path
 
-# Set environment variable before triton imports to restrict backend discovery
+# Set up Python compilation environment for Triton JIT
+if hasattr(sys, '_MEIPASS'):
+    meipass = Path(sys._MEIPASS)
+    
+    # Set Python include path for headers (Python.h)
+    python_include = meipass / 'include'
+    if python_include.exists():
+        os.environ['PYTHON_INCLUDE'] = str(python_include)
+    
+    # Set Python libs path for linking
+    python_libs = meipass / 'libs'
+    if python_libs.exists():
+        os.environ['PYTHON_LIBS'] = str(python_libs)
+    
+    # Set TRITON_CACHE_DIR to writable temp directory
+    import tempfile
+    triton_cache = Path(tempfile.gettempdir()) / 'triton_cache'
+    triton_cache.mkdir(exist_ok=True)
+    os.environ['TRITON_CACHE_DIR'] = str(triton_cache)
+    
+    # Enable Triton JIT compilation (remove interpret mode)
+    # Remove TRITON_INTERPRET if it was set to disable JIT
+    os.environ.pop('TRITON_INTERPRET', None)
+    
+    print(f"Triton JIT enabled with cache: {triton_cache}")
+    if python_include.exists():
+        print(f"Python headers available: {python_include}")
+    if python_libs.exists():
+        print(f"Python libs available: {python_libs}")
+
+# Restrict Triton to NVIDIA backend only (keep this part)
 os.environ['TRITON_BACKENDS'] = 'nvidia'
 
-"""
-PyInstaller runtime hook to restrict Triton to NVIDIA backend only.
-
-This prevents Triton from trying to discover and load AMD backends,
-which aren't included in the frozen executable.
-
-CRITICAL: This must run BEFORE any triton imports happen.
-"""
-import os
-import sys
-
-# Set environment variable to disable Triton backend auto-discovery
-# This prevents the import-time backend loading that causes FileNotFoundError
-os.environ['TRITON_INTERPRET'] = '1'  # Interpretation mode - no JIT compilation
-
-# Set TRITON_CACHE_DIR to use PyInstaller temp directory
-if hasattr(sys, '_MEIPASS'):
-    os.environ['TRITON_CACHE_DIR'] = os.path.join(sys._MEIPASS, 'triton_cache')
 def _patch_triton_backends():
     """Patch Triton to only discover NVIDIA backends in frozen app."""
     try:
