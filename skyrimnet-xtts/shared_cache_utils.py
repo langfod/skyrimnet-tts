@@ -102,8 +102,8 @@ def get_speakers_dir(language: str = "en") -> Path:
     return speakers_dir
 
 @functools.cache
-def get_cache_key(audio_path, uuid: int | None = None) -> Optional[str]:
-    """Generate a cache key based on audio file, UUID"""
+def get_cache_key(audio_path) -> Optional[str]:
+    """Generate a cache key based on audio file"""
     if audio_path is None:
         return None
 
@@ -180,16 +180,16 @@ def _save_pt_to_disk(filename, data):
         logger.error(f"Failed to save data: {e}")
 
 
-def get_latent_from_audio(model:Xtts, language: str, speaker_audio: str, speaker_audio_uuid: int = None, latents_only: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+def get_latent_from_audio(model:Xtts, language: str, speaker_audio: str, latents_only: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
     """Get or compute and cache latents for a given speaker audio file."""
     if speaker_audio is None:
         return None, None
-    
-    cache_file_key = get_cache_key(speaker_audio, speaker_audio_uuid)
+
+    cache_file_key = get_cache_key(speaker_audio)
     cached = cache_manager.get(language, cache_file_key)
     if cached:
         logger.info(
-            f"Using in-memory cached latents for {Path(speaker_audio).stem} with UUID {speaker_audio_uuid}")
+            f"Using in-memory cached latents for {Path(speaker_audio).stem}")
         gpt_cond_latent = cached["gpt_cond_latent"].to(dtype=model.gpt.dtype)
         speaker_embedding = cached["speaker_embedding"].to(dtype=torch.float32)
         return gpt_cond_latent, speaker_embedding
@@ -327,7 +327,7 @@ def get_wavout_dir():
     return wavout_dir
 
 
-def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid: int = None) -> Path:
+def save_torchaudio_wav(wav_tensor, sr, audio_path) -> Path:
     """Save a tensor as a WAV file using torchaudio"""
 
     if wav_tensor.device.type != 'cpu':
@@ -335,7 +335,7 @@ def save_torchaudio_wav(wav_tensor, sr, audio_path, uuid: int = None) -> Path:
 
     formatted_now_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    filename = f"{formatted_now_time}_{get_cache_key(audio_path, uuid)}"
+    filename = f"{formatted_now_time}_{get_cache_key(audio_path)}"
     path = Path(get_wavout_dir(), f"{filename}.wav")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

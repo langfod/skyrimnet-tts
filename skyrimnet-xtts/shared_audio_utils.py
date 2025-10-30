@@ -22,7 +22,6 @@ def generate_audio_file(
     language: str,
     speaker_wav: str,
     text: str,
-    uuid: Optional[int] = None,
     stream: bool = False,
     **inference_kwargs
 ) -> Path:
@@ -34,7 +33,6 @@ def generate_audio_file(
         language: Language code for synthesis
         speaker_wav: Speaker reference (file path or speaker name)
         text: Text to synthesize
-        uuid: Optional UUID for caching and file naming
         **inference_kwargs: Additional parameters for model.inference_stream()
             Supported kwargs:
             - temperature: Controls randomness (default from DEFAULT_TTS_PARAMS)
@@ -55,11 +53,11 @@ def generate_audio_file(
 
     output_sample_rate = model.args.output_sample_rate
 
-    logger.info(f"Generating audio for text='{text[:50]}...', speaker='{Path(speaker_wav).stem}', language='{language}', uuid={uuid}, stream={stream}")
-    
+    logger.info(f"Generating audio for text='{text[:50]}...', speaker='{Path(speaker_wav).stem}', language='{language}', stream={stream}")
+
     # Get latents from speaker
     gpt_cond_latent, speaker_embedding = get_latent_from_audio(
-        model, language, speaker_wav, uuid
+        model, language, speaker_wav
     )
     
     # Check text length and enable splitting if needed
@@ -105,7 +103,6 @@ def generate_audio_file(
         wav_tensor=wav_out.unsqueeze(0),
         sr=output_sample_rate,
         audio_path=speaker_wav,
-        uuid=uuid
     )
     wav_length_s = wav_out.shape[0] / output_sample_rate
 
