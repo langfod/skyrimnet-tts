@@ -207,16 +207,16 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
             raise HTTPException(status_code=400, detail="Text is required")
         
 
-        if request.text == "ping" and IGNORE_PING:
-           if IGNORE_PING is None:
-               IGNORE_PING = "pending"
-           else:
-               logger.info("Ping request received, sending silence audio.")            
-               return FileResponse(
-                   path=SILENCE_AUDIO_PATH,
-                      filename=request.save_path,
-                      media_type="audio/wav"
-                      )
+        if request.text == "ping":
+            if IGNORE_PING is None:
+                IGNORE_PING = "pending"
+            else:
+                logger.info("Ping request received, sending silence audio.")            
+                return FileResponse(
+                    path=SILENCE_AUDIO_PATH,
+                    filename=request.save_path,
+                    media_type="audio/wav"
+                )
         
         try:
             language = validate_language(request.language or "en")
@@ -252,7 +252,7 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
 
         if IGNORE_PING == "pending":
             IGNORE_PING = True
-            os.remove(wav_out_path)
+            Path(wav_out_path).unlink(missing_ok=True)
             wav_out_path = SILENCE_AUDIO_PATH      
         return FileResponse(
             path=str(wav_out_path),

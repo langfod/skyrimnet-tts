@@ -94,10 +94,10 @@ def generate_audio(model_choice:str=None, text:str=None, language:str="en", spea
 
     if text == "ping":
        if IGNORE_PING is None:
-        IGNORE_PING = "pending"
+          IGNORE_PING = "pending"
        else:
           logger.info("Ping request received, sending silence audio.")
-          return [SILENCE_AUDIO_PATH, job_id]   
+          return SILENCE_AUDIO_PATH, job_id
     
     setup_model_seed(randomize=randomize_seed)
 
@@ -173,9 +173,9 @@ def generate_audio(model_choice:str=None, text:str=None, language:str="en", spea
     )
 
     if IGNORE_PING == "pending":
-       IGNORE_PING = True
-       os.remove(wav_out_path)
-       wav_out_path = SILENCE_AUDIO_PATH
+        IGNORE_PING = True
+        Path(wav_out_path).unlink(missing_ok=True)
+        wav_out_path = SILENCE_AUDIO_PATH
     
     return wav_out_path, job_id
 
