@@ -44,7 +44,7 @@ except ImportError:
 
 # Global model state
 CURRENT_MODEL = None
-IGNORE_PING = True
+IGNORE_PING = None
 CACHED_TEMP_DIR = None
 SILENCE_AUDIO_PATH = "assets/silence_100ms.wav"
 
