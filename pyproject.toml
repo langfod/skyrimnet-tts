@@ -27,7 +27,7 @@ dependencies = [
     "numpy",
     "psutil",
     "spacy[ja]",
-    "coqui-tts[languages]",
+    "ko-speech-tools>=0.1.0",
     "pydantic",
     "gradio",
     "loguru",

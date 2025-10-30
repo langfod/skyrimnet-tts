@@ -89,11 +89,15 @@ datas += collect_data_files("setuptools", excludes=[
 datas += collect_data_files("unidic_lite", excludes=[
     "test*", "*test*", "*.md", "*.txt", "*.rst"
 ])
-datas += collect_data_files("jamo", excludes=[
+
+# CRITICAL: Korean text processing - includes data files and dictionary
+datas += collect_data_files("ko_speech_tools", excludes=[
     "test*", "*test*", "*.md", "*.txt", "*.rst"
 ])
-
-datas += collect_data_files("hangul_romanize", excludes=[
+datas += collect_data_files("mecab_ko", excludes=[
+    "test*", "*test*", "*.md", "*.txt", "*.rst"
+])
+datas += collect_data_files("mecab_ko_dic", excludes=[
     "test*", "*test*", "*.md", "*.txt", "*.rst"
 ])
 
@@ -283,7 +287,12 @@ hiddenimports += [
 hiddenimports += [
     'unidic_lite', 
     'fugashi',
-    'jamo',
+    'ko_speech_tools',
+    'ko_speech_tools.jamo',
+    'ko_speech_tools.g2p',
+    'ko_speech_tools.data',
+    'mecab_ko',
+    'mecab_ko_dic',
     'jaraco',
     'setuptools',
     # CRITICAL: Core spaCy modules needed for TTS
@@ -299,7 +308,8 @@ hiddenimports += [
 if any(lang.startswith("zh") for lang in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS):
     hiddenimports += ['spacy_pkuseg', 'pypinyin']
 if "ko" in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS:
-    hiddenimports += ['g2pkk', 'jamo']
+    hiddenimports += collect_submodules('ko_speech_tools')
+    hiddenimports += collect_submodules('mecab_ko')
 if "ja" in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS:
     hiddenimports += ['unidic_lite']
 
