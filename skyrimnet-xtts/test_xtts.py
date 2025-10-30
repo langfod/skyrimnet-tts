@@ -153,7 +153,6 @@ if __name__ == "__main__":
         language=language,
         speaker_wav=speaker_audio,
         text=text,
-        uuid=speaker_audio_uuid,
         stream=True,
         **inference_kwargs
         )
@@ -163,7 +162,6 @@ if __name__ == "__main__":
         language=language,
         speaker_wav=speaker_audio,
         text=text,
-        uuid=speaker_audio_uuid,
         stream=True,
         **inference_kwargs
         )

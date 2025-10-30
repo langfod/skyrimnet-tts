@@ -6,6 +6,7 @@ Simplified FastAPI service modeling APIs from xtts_api_server but using methodol
 """
 
 # Standard library imports
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -24,7 +25,7 @@ from loguru import logger
 try:
     # Try relative imports first (for module execution: python -m skyrimnet-xtts)
     from .shared_cache_utils import get_latent_from_audio
-    from .shared_config import SUPPORTED_LANGUAGE_CODES, validate_language
+    from .shared_config import SUPPORTED_LANGUAGE_CODES, validate_language, get_tts_params
     from .shared_args import parse_api_args
     from .shared_audio_utils import generate_audio_file
     from .shared_app_utils import setup_application_logging, initialize_application_environment
@@ -32,7 +33,7 @@ try:
 except ImportError:
     # Fall back to absolute imports (for direct execution: python skyrimnet_api.py)
     from shared_cache_utils import get_latent_from_audio
-    from shared_config import SUPPORTED_LANGUAGE_CODES, validate_language
+    from shared_config import SUPPORTED_LANGUAGE_CODES, validate_language, get_tts_params
     from shared_args import parse_api_args
     from shared_audio_utils import generate_audio_file
     from shared_app_utils import setup_application_logging, initialize_application_environment
@@ -43,8 +44,10 @@ except ImportError:
 
 # Global model state
 CURRENT_MODEL = None
-IGNORE_PING = False
+IGNORE_PING = None
 CACHED_TEMP_DIR = None
+SILENCE_AUDIO_PATH = "assets/silence_100ms.wav"
+
 # =============================================================================
 # COMMAND LINE ARGUMENT PARSING
 # =============================================================================
@@ -80,6 +83,14 @@ class SynthesisRequest(BaseModel):
     language: Optional[str] = "en"
     accent: Optional[str] = None
     save_path: Optional[str] = None
+    # TTS inference parameters
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    speed: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+    # Override flag: if True, payload values override config file
+    override: Optional[bool] = False
 
 
 # =============================================================================
@@ -107,7 +118,7 @@ def get_cached_temp_dir():
 app = FastAPI(title="SkyrimNet TTS API", description="Simplified TTS API service", version="1.0.0")
 
 # Request logging middleware (logs ALL requests, even undefined endpoints)
-#@app.middleware("http")
+@app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     
@@ -174,13 +185,20 @@ app.add_middleware(
 @app.post("/tts_to_audio/")
 async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTasks):
     """
-    Generate TTS audio from text with specified speaker voice
+    Generate TTS audio from text with specified speaker voice.
+    
+    Parameter priority (highest to lowest):
+    1. Payload with override=True: payload values override everything
+    2. Config file "api" mode: uses payload values when config says "api"
+    3. Config file numeric values: uses config file values
+    4. DEFAULT_TTS_PARAMS: default fallback values
     """
     global IGNORE_PING
     try:
         logger.info(f"Post tts_to_audio - Processing TTS to audio with request: "
                    f"text='{request.text}' speaker_wav='{request.speaker_wav}' "
-                   f"language='{request.language}' accent={request.accent} save_path='{request.save_path}'")
+                   f"language='{request.language}' accent={request.accent} save_path='{request.save_path}' "
+                   f"override={request.override}")
         
         if not CURRENT_MODEL:
             raise HTTPException(status_code=500, detail="Model not loaded")
@@ -189,14 +207,16 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
             raise HTTPException(status_code=400, detail="Text is required")
         
 
-        if request.text == "ping" and (request.speaker_wav == 'maleeventoned' or request.speaker_wav == 'player voice') and not IGNORE_PING:
-            IGNORE_PING = True
-            return FileResponse(
-                path="assets/silence_100ms.wav",
-                filename=request.save_path,
-                media_type="audio/wav"
-            )
-        IGNORE_PING = True
+        if request.text == "ping":
+            if IGNORE_PING is None:
+                IGNORE_PING = "pending"
+            else:
+                logger.info("Ping request received, sending silence audio.")            
+                return FileResponse(
+                    path=SILENCE_AUDIO_PATH,
+                    filename=request.save_path,
+                    media_type="audio/wav"
+                )
         
         try:
             language = validate_language(request.language or "en")
@@ -206,14 +226,34 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
         # Get latents from speaker
         speaker_wav = request.speaker_wav or "malecommoner"
         text = request.text
+        
+        # Resolve TTS parameters using config system
+        payload_params = {
+            'temperature': request.temperature,
+            'top_p': request.top_p,
+            'top_k': request.top_k,
+            'speed': request.speed,
+            'repetition_penalty': request.repetition_penalty
+        }
+        
+        tts_params = get_tts_params(
+            payload_params=payload_params,
+            override_flag=request.override
+        )
+        #logger.info(f"Resolved TTS params: {tts_params if tts_params else 'are empty!'}")
 
         wav_out_path = generate_audio_file(
             model=CURRENT_MODEL,
             language=language,
             speaker_wav=speaker_wav,
-            text=text
+            text=text,
+            **tts_params
         )
-                    
+
+        if IGNORE_PING == "pending":
+            IGNORE_PING = True
+            Path(wav_out_path).unlink(missing_ok=True)
+            wav_out_path = SILENCE_AUDIO_PATH      
         return FileResponse(
             path=str(wav_out_path),
             filename=request.save_path,
@@ -254,7 +294,6 @@ async def create_and_store_latents(
         
         # Use cached temp directory and create unique filename
         temp_dir = get_cached_temp_dir()
-        #unique_filename = f"{uuid.uuid4().hex}_{wav_file.filename}"
         temp_audio_path = temp_dir.joinpath(wav_file.filename)
         
         try:

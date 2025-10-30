@@ -5,6 +5,7 @@ Enhanced with disk and memory caching for speaker embeddings
 """
 
 # Standard library imports
+import os
 from pathlib import Path
 import uuid
 
@@ -17,7 +18,7 @@ from loguru import logger
 try:
     # Try relative imports first (for module execution: python -m skyrimnet-xtts)
     from .shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
-    from .shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language
+    from .shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language, load_skyrimnet_config
     from .shared_args import parse_gradio_args
     from .shared_audio_utils import generate_audio_file
     from .shared_app_utils import initialize_application_environment
@@ -25,7 +26,7 @@ try:
 except ImportError:
     # Fall back to absolute imports (for direct execution: python skyrimnet_xtts.py)
     from shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
-    from shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language
+    from shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language, load_skyrimnet_config
     from shared_args import parse_gradio_args
     from shared_audio_utils import generate_audio_file
     from shared_app_utils import initialize_application_environment
@@ -38,12 +39,11 @@ except ImportError:
 # Global model state
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
-IGNORE_PING = False
+IGNORE_PING = None
+SILENCE_AUDIO_PATH = "assets/silence_100ms.wav"
 # Cache flags - defaults that can be overridden by skyrimnet_config.txt
 ENABLE_DISK_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_DISK_CACHE"]
 ENABLE_MEMORY_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_MEMORY_CACHE"]
-_CONFIG_CACHE = None
-_CONFIG_FILE_PATH = "skyrimnet_config.txt"
 # Testing flag - when True, bypasses config loading and uses all API values
 _USE_API_MODE = False
 _FROM_GRADIO = False
@@ -57,50 +57,6 @@ args = parse_gradio_args("XTTS Text-to-Speech Application with Gradio Interface"
 # =============================================================================
 # Support Functions
 # =============================================================================
-
-def load_skyrimnet_config():
-    """Load configuration from skyrimnet_config.txt - simplified version"""
-    global _CONFIG_CACHE, ENABLE_MEMORY_CACHE, ENABLE_DISK_CACHE
-    
-    if _CONFIG_CACHE is not None:
-        return _CONFIG_CACHE
-    
-    # Simple config loading - just get user overrides from file
-    config_overrides = {}
-    if Path(_CONFIG_FILE_PATH).exists():
-        try:
-            with open(_CONFIG_FILE_PATH, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        if '=' in line:
-                            key, value = line.split('=', 1)
-                            key = key.strip().lower()
-                            value = value.strip()
-                            
-                            # Parse TTS parameters
-                            if key in ['temperature', 'top_p', 'speed', 'repetition_penalty']:
-                                if value.lower() != "default":
-                                    try:
-                                        config_overrides[key] = float(value)
-                                    except ValueError:
-                                        logger.warning(f"Invalid value for {key}: {value}")
-                            elif key == 'top_k':
-                                if value.lower() != "default":
-                                    try:
-                                        config_overrides[key] = int(value)
-                                    except ValueError:
-                                        logger.warning(f"Invalid value for {key}: {value}")
-                            # Parse cache flags
-                            elif key == 'enable_memory_cache':
-                                ENABLE_MEMORY_CACHE = value.lower() in ['true', '1', 'yes', 'on']
-                            elif key == 'enable_disk_cache':
-                                ENABLE_DISK_CACHE = value.lower() in ['true', '1', 'yes', 'on']
-        except Exception as e:
-            logger.warning(f"Error loading config file {_CONFIG_FILE_PATH}: {e}")
-    
-    _CONFIG_CACHE = config_overrides
-    return _CONFIG_CACHE
 
 def get_config_override(param_name, api_value):
     """Get config override value, only using API value in API mode"""
@@ -128,21 +84,20 @@ def generate_audio(model_choice:str=None, text:str=None, language:str="en", spea
     Generates audio based on the provided UI parameters with enhanced caching.
     """
     global IGNORE_PING
-    #print(locals())
+    job_id = seed
+
     language = validate_language(language)
+
     if isinstance(speaker_audio, dict) and 'path' in speaker_audio:
         speaker_audio = speaker_audio['path']
     logger.info(f"inputs: text={text}, language={language}, speaker_audio={Path(speaker_audio).stem if speaker_audio else 'None'}, seed={seed}")
 
-    #if text == "ping" and (speaker_audio is None or speaker_audio == 'maleeventoned' or speaker_audio == 'player voice'):
-    #logger.info("Ping received.")
-    #if text == "ping" and (speaker_audio is None or speaker_audio == 'maleeventoned' or speaker_audio == 'player voice') and not IGNORE_PING:
-    #    IGNORE_PING = True
-    #    #logger.info("Ping sending silence audio.")
-    #    return "assets/silence_100ms.wav", seed
-    #IGNORE_PING = True
-
-    speaker_audio_uuid = seed      
+    if text == "ping":
+       if IGNORE_PING is None:
+          IGNORE_PING = "pending"
+       else:
+          logger.info("Ping request received, sending silence audio.")
+          return SILENCE_AUDIO_PATH, job_id
     
     setup_model_seed(randomize=randomize_seed)
 
@@ -213,21 +168,26 @@ def generate_audio(model_choice:str=None, text:str=None, language:str="en", spea
         language=language,
         speaker_wav=speaker_audio,
         text=text,
-        uuid=speaker_audio_uuid,
         stream=STREAM,
         **inference_kwargs
     )
-    return wav_out_path, speaker_audio_uuid
+
+    if IGNORE_PING == "pending":
+        IGNORE_PING = True
+        Path(wav_out_path).unlink(missing_ok=True)
+        wav_out_path = SILENCE_AUDIO_PATH
+    
+    return wav_out_path, job_id
 
 
 def generate_gradio_audio(model_choice, text, language, speaker_audio, prefix_audio, 
-                speed, top_p,top_k, temperature, repetition_penalty, uuid_number) -> tuple[Path, int]:
+                speed, top_p,top_k, temperature, repetition_penalty, job_id) -> tuple[Path, int]:
     global _FROM_GRADIO
     _FROM_GRADIO = True
-    wav_out_path, speaker_audio_uuid = generate_audio(model_choice=model_choice, text=text, language=language, speaker_audio=speaker_audio, prefix_audio=prefix_audio,
-                           speaking_rate=speed, top_p=top_p, min_k=top_k, linear=temperature, confidence=repetition_penalty, seed=uuid_number)
+    wav_out_path, job_id = generate_audio(model_choice=model_choice, text=text, language=language, speaker_audio=speaker_audio, prefix_audio=prefix_audio,
+                           speaking_rate=speed, top_p=top_p, min_k=top_k, linear=temperature, confidence=repetition_penalty, seed=job_id)
     _FROM_GRADIO = False
-    return wav_out_path, speaker_audio_uuid
+    return wav_out_path, job_id
 
 def build_interface():
 
@@ -289,7 +249,7 @@ def build_interface():
         quadratic = gr.Number(visible=False)
         randomize_seed = gr.Checkbox(visible=False)
         unconditional_keys = gr.Textbox(visible=False)
-        uuid_number = gr.Number(visible=False, value=uuid.uuid4())
+        job_id = gr.Number(visible=False, value=uuid.uuid4())
         speed_input = gr.Number(visible=False)
         top_p_input = gr.Number(visible=False)
         top_k_input = gr.Number(visible=False)
@@ -299,8 +259,8 @@ def build_interface():
         # Web UI button - uses visible sliders with generate_gradio_audio
         generate_button.click(fn=generate_gradio_audio,
             inputs=[model_choice, text, language, speaker_audio, prefix_audio, 
-                speed, top_p, top_k, temperature, repetition_penalty, uuid_number],
-                 outputs=[output_audio, uuid_number])
+                speed, top_p, top_k, temperature, repetition_penalty, job_id],
+                 outputs=[output_audio, job_id])
         
         # API-only button - uses hidden Number components with generate_audio
         # This is the endpoint that external API calls should use
@@ -308,8 +268,8 @@ def build_interface():
         api_button.click(fn=generate_audio,
             inputs=[model_choice, text, language, speaker_audio, prefix_audio, emotion1, emotion2, emotion3, emotion4, emotion5, emotion6, emotion7, emotion8,
                   vq_single, fmax, pitch_std, speaking_rate, dnsmos_ovrl, speaker_noised, cfg_scale, top_p,
-                  min_k, min_p, linear, confidence, quadratic, uuid_number, randomize_seed, unconditional_keys],
-                  outputs=[output_audio, uuid_number])
+                  min_k, min_p, linear, confidence, quadratic, job_id, randomize_seed, unconditional_keys],
+                  outputs=[output_audio, job_id])
         
         # Expose only the API function for external calls
         gr.api(fn=generate_audio, api_name="generate_audio")
@@ -327,29 +287,6 @@ if __name__ == "__main__":
     # Load model with standardized initialization
     CURRENT_MODEL = initialize_model_with_cache(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed, use_bfloat16=args.use_bfloat16)
 
-    # Test audio generation
-    #Warmup
-
-    #wav, _ = generate_audio(text="warmup", speaker_audio="malebrute", language="en")
-    #wav, _ = generate_audio(text="warmup", speaker_audio="malebrute", language="en", stream=True)
-#
-    #test_text = "Now let's make my mum's favourite. So three mars bars into the pan. Then we add the tuna and just stir for a bit, just let the chocolate and fish infuse. A sprinkle of olive oil and some tomato ketchup. Now smell that. Oh boy this is going to be incredible."
-    #stream_test_times = []
-    #nonstream_test_times = []
-    #for i in range(6):
-    #    stream_start = time.perf_counter()
-    #    wav, _ = generate_audio(text=test_text, speaker_audio="malebrute", language="en", stream=True)
-    #    stream_test_times.append(time.perf_counter() - stream_start)
-#
-    #    non_stream_start = time.perf_counter()
-    #    wav, _ = generate_audio(text=test_text, speaker_audio="malebrute", language="en", stream=False)
-    #    nonstream_test_times.append(time.perf_counter() - non_stream_start)
-#
-#
-#
-    #stream_avg = sum(stream_test_times) / len(stream_test_times)
-    #nonstream_avg = sum(nonstream_test_times) / len(nonstream_test_times)
-    #logger.info(f"Tested audio generation {i} times- streaming avg: {stream_avg}, non-streaming avg: {nonstream_avg}")
 
     demo = build_interface()
     demo.launch(server_name=args.server, server_port=args.port, share=args.share, inbrowser=args.inbrowser, debug=True, show_api=True)

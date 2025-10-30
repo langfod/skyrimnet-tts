@@ -5,6 +5,7 @@ import textwrap
 from functools import cached_property
 
 import torch
+from ko_speech_tools import hangul_romanize
 from num2words import num2words
 from tokenizers import Tokenizer
 
@@ -596,16 +597,6 @@ def japanese_cleaners(text, katsu):
     return text
 
 
-def korean_transliterate(text):
-    try:
-        from hangul_romanize import Transliter
-        from hangul_romanize.rule import academic
-    except ImportError as e:
-        raise ImportError("Korean requires: hangul_romanize") from e
-    r = Transliter(academic)
-    return r.translit(text)
-
-
 DEFAULT_VOCAB_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../data/tokenizer.json")
 
 
@@ -656,7 +647,7 @@ class VoiceBpeTokenizer:
             if lang == "zh":
                 txt = chinese_transliterate(txt)
             if lang == "ko":
-                txt = korean_transliterate(txt)
+                txt = hangul_romanize(txt)
         elif lang == "ja":
             txt = japanese_cleaners(txt, self.katsu)
         else:
