@@ -613,7 +613,7 @@ def expand_skyrim_dates_multilingual(text, lang="en"):
 
 def multilingual_cleaners(text, lang):
     # remove double quotes and asterisks
-    text = re.sub(r'[*"“‟„]', '', text)
+    text = re.sub(r'[*"""„‟«»]', '', text)
     # remove single quotes around whole words 
     text = re.sub(r"(?<!\w)['\u2018\u2019]([^\s]+?)['\u2018\u2019](?!\w)", r"\1", text)
 
