@@ -12,7 +12,7 @@ from tokenizers import Tokenizer
 from COQUI_AI_TTS.tts.layers.xtts.zh_num2words import TextNorm as zh_num2words
 from COQUI_AI_TTS.tts.utils.text.cleaners import collapse_whitespace, lowercase
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def get_spacy_lang(lang):
@@ -258,7 +258,7 @@ _symbols_multilingual = {
             ("&", " and "),
             ("@", " at "),
             ("%", " percent "),
-            ("#", " hash "),
+            #("#", " hash "),
             ("$", " dollar "),
             ("£", " pound "),
             ("°", " degree "),
@@ -270,7 +270,7 @@ _symbols_multilingual = {
             ("&", " y "),
             ("@", " arroba "),
             ("%", " por ciento "),
-            ("#", " numeral "),
+            #("#", " numeral "),
             ("$", " dolar "),
             ("£", " libra "),
             ("°", " grados "),
@@ -282,7 +282,7 @@ _symbols_multilingual = {
             ("&", " et "),
             ("@", " arobase "),
             ("%", " pour cent "),
-            ("#", " dièse "),
+            #("#", " dièse "),
             ("$", " dollar "),
             ("£", " livre "),
             ("°", " degrés "),
@@ -294,7 +294,7 @@ _symbols_multilingual = {
             ("&", " und "),
             ("@", " at "),
             ("%", " prozent "),
-            ("#", " raute "),
+            #("#", " raute "),
             ("$", " dollar "),
             ("£", " pfund "),
             ("°", " grad "),
@@ -306,7 +306,7 @@ _symbols_multilingual = {
             ("&", " e "),
             ("@", " arroba "),
             ("%", " por cento "),
-            ("#", " cardinal "),
+            #("#", " cardinal "),
             ("$", " dólar "),
             ("£", " libra "),
             ("°", " graus "),
@@ -318,7 +318,7 @@ _symbols_multilingual = {
             ("&", " e "),
             ("@", " chiocciola "),
             ("%", " per cento "),
-            ("#", " cancelletto "),
+            #("#", " cancelletto "),
             ("$", " dollaro "),
             ("£", " sterlina "),
             ("°", " gradi "),
@@ -330,7 +330,7 @@ _symbols_multilingual = {
             ("&", " i "),
             ("@", " małpa "),
             ("%", " procent "),
-            ("#", " krzyżyk "),
+            #("#", " krzyżyk "),
             ("$", " dolar "),
             ("£", " funt "),
             ("°", " stopnie "),
@@ -343,7 +343,7 @@ _symbols_multilingual = {
             ("&", " و "),
             ("@", " على "),
             ("%", " في المئة "),
-            ("#", " رقم "),
+            #("#", " رقم "),
             ("$", " دولار "),
             ("£", " جنيه "),
             ("°", " درجة "),
@@ -356,7 +356,7 @@ _symbols_multilingual = {
             ("&", " 和 "),
             ("@", " 在 "),
             ("%", " 百分之 "),
-            ("#", " 号 "),
+            #("#", " 号 "),
             ("$", " 美元 "),
             ("£", " 英镑 "),
             ("°", " 度 "),
@@ -369,7 +369,7 @@ _symbols_multilingual = {
             ("&", " a "),
             ("@", " na "),
             ("%", " procento "),
-            ("#", " křížek "),
+            #("#", " křížek "),
             ("$", " dolar "),
             ("£", " libra "),
             ("°", " stupně "),
@@ -382,7 +382,7 @@ _symbols_multilingual = {
             ("&", " и "),
             ("@", " собака "),
             ("%", " процентов "),
-            ("#", " номер "),
+            #("#", " номер "),
             ("$", " доллар "),
             ("£", " фунт "),
             ("°", " градус "),
@@ -395,7 +395,7 @@ _symbols_multilingual = {
             ("&", " en "),
             ("@", " bij "),
             ("%", " procent "),
-            ("#", " hekje "),
+            #("#", " hekje "),
             ("$", " dollar "),
             ("£", " pond "),
             ("°", " graden "),
@@ -407,7 +407,7 @@ _symbols_multilingual = {
             ("&", " ve "),
             ("@", " at "),
             ("%", " yüzde "),
-            ("#", " diyez "),
+            #("#", " diyez "),
             ("$", " dolar "),
             ("£", " sterlin "),
             ("°", " derece "),
@@ -419,7 +419,7 @@ _symbols_multilingual = {
             ("&", " és "),
             ("@", " kukac "),
             ("%", " százalék "),
-            ("#", " kettőskereszt "),
+            #("#", " kettőskereszt "),
             ("$", " dollár "),
             ("£", " font "),
             ("°", " fok "),
@@ -432,7 +432,7 @@ _symbols_multilingual = {
             ("&", " 그리고 "),
             ("@", " 에 "),
             ("%", " 퍼센트 "),
-            ("#", " 번호 "),
+            #("#", " 번호 "),
             ("$", " 달러 "),
             ("£", " 파운드 "),
             ("°", " 도 "),
@@ -444,7 +444,7 @@ _symbols_multilingual = {
             ("&", " और "),
             ("@", " ऐट दी रेट "),
             ("%", " प्रतिशत "),
-            ("#", " हैश "),
+            #("#", " हैश "),
             ("$", " डॉलर "),
             ("£", " पाउंड "),
             ("°", " डिग्री "),
@@ -567,13 +567,76 @@ def expand_numbers_multilingual(text, lang="en"):
     return text
 
 
+def expand_skyrim_dates_multilingual(text, lang="en"):
+    """
+    Expand Skyrim-style dates like "Frostfall, 4E 201" to "Frostfall, Fourth Era 201"
+    
+    Pattern: month, dE year where d is a digit (1-9) and year is 1-3 digits
+    Examples:
+        "Frostfall, 4E 201" -> "Frostfall, Fourth Era 201"
+        "Sun's Dawn, 1E 243" -> "Sun's Dawn, First Era 243"
+    """
+    # Era translations for different languages
+    era_word = {
+        "en": "era",
+        "es": "era",
+        "fr": "ère",
+        "de": "ära",
+        "pt": "era",
+        "it": "era",
+        "pl": "era",
+        "ar": "عصر",
+        "cs": "éra",
+        "ru": "эра",
+        "nl": "tijdperk",
+        "tr": "çağ",
+        "hu": "korszak",
+        "ko": "시대",
+        "hi": "युग",
+        "zh": "纪元",
+    }
+    
+    # Regex to match Skyrim era pattern: digit followed by E, then space and 1-3 digits
+    # e.g., "4E 201", "1E 1", "3E 433"
+    skyrim_era_re = re.compile(r'\b([1-9])E\s+(\d{1,3})\b', re.IGNORECASE)
+    
+    def expand_era(match):
+        era_num = match.group(1)
+        year = num2words(int(match.group(2)), lang=lang)        
+        ordinal_era = num2words(int(era_num), ordinal=True, lang=lang)        
+        era_text = era_word.get(lang, "era")       
+        return f"{ordinal_era} {era_text}, {year}"
+    
+    text = re.sub(skyrim_era_re, expand_era, text)
+
+    logger.info(f"After expanding Skyrim dates: {text}")
+    return text
+
+
 def multilingual_cleaners(text, lang):
-    text = text.replace('"', "")
+    # remove double quotes and asterisks
+    text = re.sub(r'[*"“‟„]', '', text)
+    # remove single quotes around whole words 
+    text = re.sub(r"(?<!\w)['\u2018\u2019]([^\s]+?)['\u2018\u2019](?!\w)", r"\1", text)
+
+    # if any line begins with # remove it and add period at end if no punctuation exists
+    lines = text.split('\n')
+    processed_lines = []
+    for line in lines:
+        if line.strip().startswith("#"):
+            line = line.strip()[1:].strip()  # Remove # and extra spaces
+            # Add period only if line doesn't end with punctuation
+            if line and not line[-1] in ".!?,;:":
+                line = line + "."
+        processed_lines.append(line)
+    text = '\n'.join(processed_lines)
+
     if lang == "tr":
         text = text.replace("İ", "i")
         text = text.replace("Ö", "ö")
         text = text.replace("Ü", "ü")
     text = lowercase(text)
+    text = expand_skyrim_dates_multilingual(text, lang)
     text = expand_numbers_multilingual(text, lang)
     text = expand_abbreviations_multilingual(text, lang)
     text = expand_symbols_multilingual(text, lang=lang)

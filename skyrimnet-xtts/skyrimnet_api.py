@@ -118,7 +118,7 @@ def get_cached_temp_dir():
 app = FastAPI(title="SkyrimNet TTS API", description="Simplified TTS API service", version="1.0.0")
 
 # Request logging middleware (logs ALL requests, even undefined endpoints)
-@app.middleware("http")
+#@app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     
