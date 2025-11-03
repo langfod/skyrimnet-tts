@@ -602,14 +602,12 @@ def expand_skyrim_dates_multilingual(text, lang="en"):
     
     def expand_era(match):
         era_num = match.group(1)
-        year = num2words(int(match.group(2)), lang=lang)        
-        ordinal_era = num2words(int(era_num), ordinal=True, lang=lang)        
-        era_text = era_word.get(lang, "era")       
+        year = num2words(int(match.group(2)), lang=lang)   
+        ordinal_era = num2words(int(era_num), ordinal=True, lang=lang)
+        era_text = era_word.get(lang, "era")
         return f"{ordinal_era} {era_text}, {year}"
     
     text = re.sub(skyrim_era_re, expand_era, text)
-
-    logger.info(f"After expanding Skyrim dates: {text}")
     return text
 
 
