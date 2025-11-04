@@ -45,7 +45,7 @@ def load_model(model_name=MODEL_NAME_DEFAULT, use_cpu=False, use_deepspeed=False
         Exception: If model loading fails
     """
     if use_cpu:
-        print(f"Loading model: : {model_name} CPU requested...")
+        logger.info(f"Loading model: : {model_name} CPU requested...")
     else:
         assert torch.cuda.is_available(), "CUDA not available and CPU mode not requested."
         if use_bfloat16:
