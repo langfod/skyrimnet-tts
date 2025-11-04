@@ -45,7 +45,7 @@ def load_model(model_name=MODEL_NAME_DEFAULT, use_cpu=False, use_deepspeed=False
         Exception: If model loading fails
     """
     if use_cpu:
-        logger.info(f"Loading model: : {model_name} CPU requested...")
+        logger.info(f"Loading model: {model_name} CPU requested...")
     else:
         assert torch.cuda.is_available(), "CUDA not available and CPU mode not requested."
         if use_bfloat16:
@@ -53,7 +53,7 @@ def load_model(model_name=MODEL_NAME_DEFAULT, use_cpu=False, use_deepspeed=False
             if not gpu_properties.major >= 8:
                 logger.warning("BFloat16 requested but GPU does not support it. Unsetting bfloat16.")
                 use_bfloat16 = False
-        logger.info(f"Loading model: : {model_name}, DeepSpeed: {use_deepspeed}, bfloat16: {use_bfloat16}...") 
+        logger.info(f"Loading model: {model_name}, DeepSpeed: {use_deepspeed}, bfloat16: {use_bfloat16}...") 
     
     try:
         # Use local model path instead of downloading

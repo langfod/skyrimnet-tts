@@ -2,7 +2,7 @@
 torch==2.1.1
 torchaudio
 nvidia-ml-py
-# Windows deepseed build
+# Windows deepspeed build
 #triton-windows<3.1 ; sys_platform == 'win32'
 https://github.com/woct0rdho/triton-windows/releases/download/v3.0.0-windows.post3/triton-3.0.0-cp310-cp310-win_amd64.whl ; sys_platform == 'win32'
 #https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'

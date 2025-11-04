@@ -9,7 +9,7 @@ Two things are needed:
 2) MS C++ compiler:
 
 
-If you happen to have Visual Studio 2022 already installed, then run Visual Studio Installer and use Modify select the  "Desktop developement with C++".
+If you happen to have Visual Studio 2022 already installed, then run Visual Studio Installer and use Modify select "Desktop development with C++".
 
 other wise use:
 
@@ -18,9 +18,9 @@ other wise use:
 
 
 
-# CUIDA 12.1 Installer
+# CUDA 12.1 Installer
 
-If you happen to have other versions of CUDA installed then ad this to "Start.bat":
+If you happen to have other versions of CUDA installed then add this to "Start.bat":
 `set CUDA_PATH="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1"`
 
 
