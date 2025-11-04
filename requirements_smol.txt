@@ -1,28 +1,31 @@
---extra-index-url=https://download.pytorch.org/whl/cu129
-torch<2.9
+--extra-index-url=https://download.pytorch.org/whl/cu121
+torch==2.1.1
 torchaudio
-# Windows deepseed build
-triton-windows<3.4 ; sys_platform == 'win32'
-https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'
+nvidia-ml-py
+# Windows deepspeed build
+#triton-windows<3.1 ; sys_platform == 'win32'
+https://github.com/woct0rdho/triton-windows/releases/download/v3.0.0-windows.post3/triton-3.0.0-cp310-cp310-win_amd64.whl ; sys_platform == 'win32'
+#https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'
+https://github.com/daswer123/resemble-enhance-windows/releases/download/deepspeed/deepspeed-0.11.2+cuda121-cp310-cp310-win_amd64.whl ; sys_platform == 'win32'
 triton<3.4 ; sys_platform != 'win32'
 deepspeed ; sys_platform != 'win32'
 
-
-hf-xet
 setuptools<81
 cupy-cuda12x
 pytorch-pfn-extras                # Optional: CuPy-PyTorch memory pool integration
 
 psutil
+
+hf-xet
 spacy[cuda12x]
 numpy
 spacy[ja]
 pydantic
 loguru
 uvicorn
-transformers
-
-gradio
+transformers<4.54
+hf-xet
+gradio==5.49.1
 
 
 ## Section added for TTS inclusion project.

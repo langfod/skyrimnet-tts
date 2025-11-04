@@ -109,7 +109,8 @@ def generate_audio_file(
     func_end_time = time.perf_counter()
     total_duration_s = func_end_time - func_start_time
     if speaker_wav:
-        logger.info(f"Total 'generate_audio' output of {wav_out_path} for {speaker_wav.split('\\')[-1]} length: {wav_length_s:.2f}s execution time: {total_duration_s:.2f}s Speed: {wav_length_s/total_duration_s:.2f}x")
+        input_wav = speaker_wav.split('\\')[-1]
+        logger.info(f"Total 'generate_audio' output of {wav_out_path} for {input_wav} length: {wav_length_s:.2f}s execution time: {total_duration_s:.2f}s Speed: {wav_length_s/total_duration_s:.2f}x")
     else:
         logger.info(f"Total 'generate_audio' execution time: {total_duration_s:.2f} seconds")
 

@@ -5,31 +5,34 @@ param(
     [switch]$noclean
 )
 
-$PACKAGE_NAME = "SkyrimNet_XTTS"
+$env:CUDA_PATH = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1"
+$env:CUDA_PATH_V12_1 = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1"
+
+$PACKAGE_NAME = "SkyrimNet_XTTS_smol"
 
 if (-not $nobuild -or $noclean) {
     
-    if (-not (Test-Path ".venv\Scripts\Activate.ps1")) {
+    if (-not (Test-Path ".venv_smol\Scripts\Activate.ps1")) {
         Write-Host "Virtual environment not found. Please set up the virtual environment before building." -ForegroundColor Red
         exit 1
     }
-    
-    .venv\Scripts\Activate.ps1
+
+    .venv_smol\Scripts\Activate.ps1
 
     if (Test-Path env:VIRTUAL_ENV) {
-    Write-Host "In a Python virtual environment: $env:VIRTUAL_ENV"
+        Write-Host "In a Python virtual environment: $env:VIRTUAL_ENV"
     } else {
-    Write-Host "Python virtual environment failure."
+        Write-Host "Python virtual environment failure."
     exit 1
     }
-
+    
     if (-not (Get-Command pyinstaller -ErrorAction SilentlyContinue)) {
         Start-Process -FilePath "pip" -ArgumentList "install", "pyinstaller" -Wait -NoNewWindow
     }
     Write-Host "Starting build process..."
     if ($noclean) {
         Write-Host "Skipping clean step as per -noclean flag."
-        Start-Process -FilePath "pyinstaller" -ArgumentList "--noconfirm", "--log-level=ERROR", "skyrimnet-xtts.spec" -Wait -NoNewWindow
+        Start-Process -FilePath "pyinstaller" -ArgumentList "--noconfirm", "--log-level=ERROR", "skyrimnet-xtts_smol.spec" -Wait -NoNewWindow
     }
     else {
         if (Test-Path "build") {
@@ -43,7 +46,7 @@ if (-not $nobuild -or $noclean) {
         }
         # remove all "__pycache__" folders under skyrimnet-xtts recursively
         Get-ChildItem -Path "skyrimnet-xtts" -Recurse -Directory | Where-Object { $_.Name -eq "__pycache__" } | Remove-Item -Recurse -Force
-        Start-Process -FilePath "pyinstaller" -ArgumentList "--clean", "--noconfirm", "--log-level=ERROR", "skyrimnet-xtts.spec" -Wait -NoNewWindow
+        Start-Process -FilePath "pyinstaller" -ArgumentList "--clean", "--noconfirm", "--log-level=ERROR", "skyrimnet-xtts_smol.spec" -Wait -NoNewWindow
     }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Build failed. Exiting."
@@ -59,15 +62,15 @@ if ($test) {
         exit 1
     }
 
-    Copy-Item -Path "models" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
-    Copy-Item -Path "speakers" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
-    Copy-Item -Path "assets" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
-    Copy-Item -Path "skyrimnet_config.txt" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
-    Copy-Item -Path "examples\Start.bat" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
-    Copy-Item -Path "examples\Start_XTTS.ps1" -Destination "dist\skyrimnet-xtts\" -Force -Recurse
+    Copy-Item -Path "models" -Destination "dist\$PACKAGE_NAME\" -Force -Recurse
+    Copy-Item -Path "speakers" -Destination "dist\$PACKAGE_NAME\" -Force -Recurse
+    Copy-Item -Path "assets" -Destination "dist\$PACKAGE_NAME\" -Force -Recurse
+    Copy-Item -Path "skyrimnet_config.txt" -Destination "dist\$PACKAGE_NAME\" -Force -Recurse
+    Copy-Item -Path "examples\Start.bat" -Destination "dist\$PACKAGE_NAME\" -Force -Recurse
+    Copy-Item -Path "examples\Start_XTTS.ps1" -Destination "dist\$PACKAGE_NAME\" -Force -Recurse
 
 
-    Set-Location -Path ./dist/skyrimnet-xtts
+    Set-Location -Path ./dist/$PACKAGE_NAME
     Start-Process -FilePath "./Start.bat" -ArgumentList "-server", "localhost", "-port", "7860" -Wait -NoNewWindow
     Set-Location -Path ../..
 }
