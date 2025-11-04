@@ -64,3 +64,4 @@ dumpbin.exe
 link.exe
 mspdbcore.dll
 tbbmalloc.dll
+/.venv_smol

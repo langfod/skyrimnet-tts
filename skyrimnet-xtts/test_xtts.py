@@ -143,7 +143,7 @@ if __name__ == "__main__":
     inference_kwargs['repetition_penalty'] = 2.1
     try:
         text="The Silver Bloods. They have a whole mine filled with prisoners to dig up silver ore, get smelted by workers they pay, and they own half the city."
-        speaker_audio="malebrute"
+        speaker_audio="assets\\malebrute.wav"
         language="en"
         speaker_audio_uuid=None
         #print(wav)
@@ -165,7 +165,6 @@ if __name__ == "__main__":
         stream=True,
         **inference_kwargs
         )
-        
 
         logger.info(f"Audio generated and saved to: {wav_out_path}")
     except Exception as e:
