@@ -150,7 +150,7 @@ thinc==8.3.6
 threadpoolctl==3.6.0
 tokenizers==0.21.4
 tomlkit==0.13.3
-torch==2.8.0+cu129
+torch==2.8.0
 torchaudio==2.8.0+cu129
 tqdm==4.67.1
 transformers==4.55.4
