@@ -4,7 +4,6 @@ SkyrimNet TTS Unified Application Entry Point
 Phase 3: Combined API and Gradio UI in a single application
 """
 
-import asyncio
 import shutil
 import sys
 import os

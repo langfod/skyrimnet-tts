@@ -60,7 +60,7 @@ args = parse_gradio_args("XTTS Text-to-Speech Application with Gradio Interface"
 def generate_audio(model_choice:str=None, text:str=None, language:str="en", speaker_audio:str=None, prefix_audio:str=None,
                     e1:float=None, e2:float=None, e3:float=None, e4:float=None, e5:float=None, e6:float=None, e7:float=None, e8:float=None,
                   vq_single:float=None, fmax:int=None, pitch_std:float=None, speaking_rate:float=None, dnsmos_ovrl:float=None, speaker_noised:float=None, cfg_scale:float=None, top_p:float=None,
-                  min_k:float=None, min_p:float=None, linear:float=None, confidence:float=None, quadratic:float=None, seed:int=None, randomize_seed:bool=None, unconditional_keys:float=None
+                  min_k:float=None, min_p:float=None, linear:float=None, confidence:float=None, quadratic:float=None, seed:int=None, randomize_seed:bool=None, unconditional_keys:str=None
                   ) -> tuple[Path, int]:
     """
     Generates audio based on the provided UI parameters with enhanced caching.
@@ -84,7 +84,7 @@ def generate_audio(model_choice:str=None, text:str=None, language:str="en", spea
     setup_model_seed(randomize=randomize_seed)
 
     if not speaker_audio or speaker_audio.isspace():
-        speaker_audio = "male    xxxxbrute"
+        speaker_audio = "malebrute"
 
     # Build payload with API values
     payload_params = {
