@@ -1,0 +1,2 @@
+# Requirements for upstream tracking script
+requests>=2.25.0
