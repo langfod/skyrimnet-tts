@@ -21,9 +21,9 @@ other wise use:
 # CUDA 12.1 Installer
 
 If you happen to have other versions of CUDA installed then add this to "Start.bat":
-`set CUDA_PATH="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1"`
+`set CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1`
 
 
 You only need these options:
 
-![examples\cuda_12_1_installer.png](examples\cuda_12_1_installer.png)
+![examples\cuda_12_1_installer.png](examples/cuda_12_1_installer.png)

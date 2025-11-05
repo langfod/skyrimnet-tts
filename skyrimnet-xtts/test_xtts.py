@@ -4,6 +4,7 @@ SkyrimNet TTS Unified Application Entry Point
 Phase 3: Combined API and Gradio UI in a single application
 """
 
+import asyncio
 import shutil
 import sys
 import os
@@ -38,7 +39,6 @@ except ImportError:
     from shared_models import initialize_model_with_cache
     from shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
     from shared_audio_utils import generate_audio_file
-
     import skyrimnet_api
     import skyrimnet_xtts as skyrimnet_gradio
 
@@ -148,23 +148,24 @@ if __name__ == "__main__":
         speaker_audio_uuid=None
         #print(wav)
 
-        wav_out_path = generate_audio_file(
-        model=model,
-        language=language,
-        speaker_wav=speaker_audio,
-        text=text,
-        stream=True,
-        **inference_kwargs
-        )
-
-        wav_out_path = generate_audio_file(
-        model=model,
-        language=language,
-        speaker_wav=speaker_audio,
-        text=text,
-        stream=True,
-        **inference_kwargs
-        )
+        #wav_out_path = generate_audio_file(
+        #model=model,
+        #language=language,
+        #speaker_wav=speaker_audio,
+        #text=text,
+        #stream=True,
+        #**inference_kwargs
+        #)
+#
+        #wav_out_path = generate_audio_file(
+        #model=model,
+        #language=language,
+        #speaker_wav=speaker_audio,
+        #text=text,
+        #stream=True,
+        #**inference_kwargs
+        #)
+        wav_out_path, _ = skyrimnet_gradio.generate_audio(model_choice='Zyphra/Zonos-v0.1-transformer', text='Warmup Time.', language='en-us', speaker_audio=speaker_audio, prefix_audio="empty_100ms.wav", e1=0.0, e2=0.0, e3=0.0, e4=0.0, e5=0.0, e6=0.0, e7=0.0, e8=1.0, vq_single=0.699999988079071, fmax=24000, pitch_std=45.0, speaking_rate=14.600000381469727, dnsmos_ovrl=4, speaker_noised=False, cfg_scale=4.5, top_p=0.0, min_k=0.0, min_p=0.0, linear=0.5, confidence=0.4000000059604645, quadratic=0.0, seed=6298667263556447910, randomize_seed=False, unconditional_keys=['emotion'])
 
         logger.info(f"Audio generated and saved to: {wav_out_path}")
     except Exception as e:

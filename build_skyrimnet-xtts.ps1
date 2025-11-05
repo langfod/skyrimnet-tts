@@ -89,7 +89,8 @@ else {
     Copy-Item -Path "speakers\en\malebrute.wav" -Destination "archive/$PACKAGE_NAME/speakers/en\" -Force -Recurse
     Copy-Item -Path "speakers\en\malecommoner.wav" -Destination "archive/$PACKAGE_NAME/speakers/en\" -Force -Recurse
     Copy-Item -Path "assets\silence_100ms.wav" -Destination "archive/$PACKAGE_NAME/assets\" -Force -Recurse
-    Copy-Item -Path "skyrimnet_config.txt" -Destination "archive/$PACKAGE_NAME\" -Force 
+    Copy-Item -Path "skyrimnet_config.txt" -Destination "archive/$PACKAGE_NAME\" -Force
+    Copy-Item -Path "README.md" -Destination "archive/$PACKAGE_NAME\" -Force  
     Copy-Item -Path "examples\Start.bat" -Destination "archive/$PACKAGE_NAME\" -Force
     Copy-Item -Path "examples\Start_XTTS.ps1" -Destination "archive/$PACKAGE_NAME\" -Force
     Copy-Item -Path "dist\skyrimnet-xtts\skyrimnet-xtts.exe" -Destination "archive/$PACKAGE_NAME\" -Force

@@ -480,12 +480,18 @@ a.datas = [x for x in a.datas if not any([
     
     # CRITICAL: Exclude NVIDIA CUDA system DLLs - users will have these installed
     any(cuda_dll.lower() in x[0].lower() for cuda_dll in cuda_dlls_to_exclude),
+    
+    # CRITICAL: Exclude AMD backend files from Triton - we only use NVIDIA CUDA
+    'triton' in x[1].lower() and 'backends' in x[1].lower() and 'amd' in x[1].lower(),
 ])]
 
 # CRITICAL: Remove NVIDIA CUDA DLLs from binaries as well (they get pulled in as binary dependencies)
 a.binaries = [x for x in a.binaries if not any([
     # Exclude all NVIDIA CUDA system DLLs - users will have these installed via CUDA toolkit
     any(cuda_dll.lower() in x[0].lower() for cuda_dll in cuda_dlls_to_exclude),
+    
+    # CRITICAL: Exclude AMD backend files from Triton - we only use NVIDIA CUDA
+    'triton' in x[0].lower() and 'backends' in x[0].lower() and 'amd' in x[0].lower(),
 ])]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)

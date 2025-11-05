@@ -18,7 +18,7 @@ from loguru import logger
 try:
     # Try relative imports first (for module execution: python -m skyrimnet-xtts)
     from .shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
-    from .shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language, load_skyrimnet_config
+    from .shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language, get_tts_params
     from .shared_args import parse_gradio_args
     from .shared_audio_utils import generate_audio_file
     from .shared_app_utils import initialize_application_environment
@@ -26,7 +26,7 @@ try:
 except ImportError:
     # Fall back to absolute imports (for direct execution: python skyrimnet_xtts.py)
     from shared_cache_utils import get_wavout_dir, get_latent_dir, get_speakers_dir
-    from shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language, load_skyrimnet_config
+    from shared_config import SUPPORTED_LANGUAGE_CODES, DEFAULT_CACHE_CONFIG, validate_language, get_tts_params
     from shared_args import parse_gradio_args
     from shared_audio_utils import generate_audio_file
     from shared_app_utils import initialize_application_environment
@@ -45,7 +45,6 @@ SILENCE_AUDIO_PATH = "assets/silence_100ms.wav"
 ENABLE_DISK_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_DISK_CACHE"]
 ENABLE_MEMORY_CACHE = DEFAULT_CACHE_CONFIG["ENABLE_MEMORY_CACHE"]
 # Testing flag - when True, bypasses config loading and uses all API values
-_USE_API_MODE = False
 _FROM_GRADIO = False
 STREAM = False
 # =============================================================================
@@ -53,23 +52,6 @@ STREAM = False
 # =============================================================================
 
 args = parse_gradio_args("XTTS Text-to-Speech Application with Gradio Interface")
-
-# =============================================================================
-# Support Functions
-# =============================================================================
-
-def get_config_override(param_name, api_value):
-    """Get config override value, only using API value in API mode"""
-    config_overrides = load_skyrimnet_config()
-    config_value = config_overrides.get(param_name)
-    
-    # Only use API values if explicitly in API mode or from Gradio web interface
-    if (_USE_API_MODE or _FROM_GRADIO) and api_value is not None:
-        return api_value
-    
-    # Otherwise, only return config file value (ignore API value)
-    return config_value
-
 
 # =============================================================================
 # MAIN APPLICATION FUNCTIONS
@@ -101,67 +83,24 @@ def generate_audio(model_choice:str=None, text:str=None, language:str="en", spea
     
     setup_model_seed(randomize=randomize_seed)
 
-    if speaker_audio is None or speaker_audio.strip() == "":
-        speaker_audio = "malebrute"
+    if not speaker_audio or speaker_audio.isspace():
+        speaker_audio = "male    xxxxbrute"
 
-    # Get parameter overrides - only pass non-None values
-    inference_kwargs = {}   
-
-    # Only use API parameters when explicitly from Gradio web interface or API mode is enabled
-    use_api_params = _FROM_GRADIO or _USE_API_MODE
-
-    # Convert parameters if we're using API mode 
-    if use_api_params and not _FROM_GRADIO:
-        # Convert parameters for Gradio API calls
-        speaking_rate = float(speaking_rate) if speaking_rate is not None else None
-        top_p = float(top_p) if top_p is not None else None
-        min_k = int(min_k) if min_k is not None else None
-        linear = float(linear) if linear is not None else None
-        confidence = float(confidence) if confidence is not None else None
-    elif _FROM_GRADIO or _USE_API_MODE:
-        # Convert parameters for web UI calls
-        speaking_rate = float(speaking_rate)
-        top_p = float(top_p)
-        min_k = int(min_k)
-        linear = float(linear)
-        confidence = float(confidence)
+    # Build payload with API values
+    payload_params = {
+        'temperature': linear,
+        'top_p': top_p,
+        'top_k': min_k,
+        'speed': speaking_rate,
+        'repetition_penalty': confidence
+    }
     
-    if use_api_params:
-        # Use API parameters directly when in API mode (Gradio web interface)
-        if linear is not None:
-            inference_kwargs['temperature'] = linear
-        if top_p is not None:
-            inference_kwargs['top_p'] = top_p
-        if min_k is not None:
-            inference_kwargs['top_k'] = min_k
-        if speaking_rate is not None:
-            inference_kwargs['speed'] = speaking_rate
-        if confidence is not None:
-            inference_kwargs['repetition_penalty'] = confidence
-        logger.info(f"Using API parameters: temp={linear}, top_p={top_p}, top_k={min_k}, speed={speaking_rate}, rep_penalty={confidence}")
-    else:
-        temp_override = get_config_override('temperature', linear)
-        if temp_override is not None:
-            inference_kwargs['temperature'] = temp_override
-
-        top_p_override = get_config_override('top_p', top_p)
-        if top_p_override is not None:
-            inference_kwargs['top_p'] = top_p_override
-
-        top_k_override = get_config_override('top_k', min_k)
-        if top_k_override is not None:
-            inference_kwargs['top_k'] = top_k_override
-
-        speed_override = get_config_override('speed', speaking_rate)
-        if speed_override is not None:
-            inference_kwargs['speed'] = speed_override
-
-        repetition_penalty_override = get_config_override('repetition_penalty', confidence)
-        if repetition_penalty_override is not None:
-            inference_kwargs['repetition_penalty'] = repetition_penalty_override
+    # Use shared config function to resolve final parameters
+    # override_flag=True when from Gradio web UI
+    inference_kwargs = get_tts_params(payload_params=payload_params, override_flag=_FROM_GRADIO)
     
     # Always pass the stream parameter
-    logger.debug(f"Inference kwargs: {inference_kwargs}")
+    logger.info(f"Inference kwargs: {inference_kwargs}")
     # Use shared audio generation function with only necessary kwargs
     wav_out_path = generate_audio_file(
         model=CURRENT_MODEL,

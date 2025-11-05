@@ -42,7 +42,7 @@ scipy              # Scientific computing (signal processing)
 coqpit             # Configuration management
 fsspec             # File system abstraction
 tqdm               # Progress bars
-
+typeguard          # Runtime type checking
 
 num2words          # Number to words conversion (used by TTS text cleaners)
 einops             # Tensor operations and manipulation
