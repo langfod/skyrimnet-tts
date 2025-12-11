@@ -57,10 +57,10 @@ def initialize_configuration():
 
 
 
-def initialize_model(use_cpu=False, use_deepspeed=False, use_bfloat16=False):
+def initialize_model(device=None, use_deepspeed=False, use_bfloat16=False):
     """Initialize and load the TTS model using shared utility"""
     return initialize_model_with_cache(
-        use_cpu=use_cpu,
+        device=device,
         seed=20250527,
         validate=True,
         use_deepspeed=use_deepspeed,
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     
     # Initialize model using shared utility
     try:
-        model = initialize_model(use_cpu=args.use_cpu, use_deepspeed=args.deepspeed, use_bfloat16=args.use_bfloat16)
+        model = initialize_model(device=args.device, use_deepspeed=args.deepspeed, use_bfloat16=args.use_bfloat16)
     except Exception as e:
         logger.error(f"Model initialization failed: {e}")
         sys.exit(1)

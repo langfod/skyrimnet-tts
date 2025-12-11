@@ -425,7 +425,7 @@ if __name__ == "__main__":
     # Load model with standardized initialization
     try:
         CURRENT_MODEL = initialize_model_with_cache(
-            use_cpu=args.use_cpu,
+            device=args.device,
             validate=True,
             use_deepspeed=args.deepspeed,
             use_bfloat16=args.use_bfloat16

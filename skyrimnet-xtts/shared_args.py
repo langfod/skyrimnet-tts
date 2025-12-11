@@ -23,9 +23,9 @@ COMMON_ARGS = {
         "help": "Server port number",
         "metavar": "PORT"
     },
-    "--use_cpu": {
-        "action": "store_true",
-        "help": "Use CPU instead of CUDA for model inference"
+    "--device": {
+        "type": str,
+        "help": 'CUDA device to use (e.g., "cuda:0", "cuda:1"). Defaults to auto-detect.'
     },
     "--deepspeed": {
         "action": "store_true",

@@ -30,30 +30,33 @@ MODEL_NAME_DEFAULT = "xtts_v2"
 # MODEL LOADING AND MANAGEMENT
 # =============================================================================
 
-def load_model(model_name=MODEL_NAME_DEFAULT, use_cpu=False, use_deepspeed=False, use_bfloat16=False) -> Xtts:
+def load_model(model_name=MODEL_NAME_DEFAULT, use_deepspeed=False, use_bfloat16=False, device="auto",) -> Xtts:
     """
     Load XTTS model with configuration
     
     Args:
         model_name: Name of the model to load (default: "xtts_v2")
-        use_cpu: Whether to force CPU mode instead of CUDA
-        
+        device: Device to load the model on ("cuda:0", "cuda:1", etc.)
+        use_deepspeed: Whether to use DeepSpeed for loading
+        use_bfloat16: Whether to use bfloat16 precision        
     Returns:
         Xtts: Loaded and configured model
         
     Raises:
         Exception: If model loading fails
     """
-    if use_cpu:
-        logger.info(f"Loading model: {model_name} CPU requested...")
-    else:
-        assert torch.cuda.is_available(), "CUDA not available and CPU mode not requested."
-        if use_bfloat16:
-            gpu_properties = torch.cuda.get_device_properties(0)
-            if not gpu_properties.major >= 8:
-                logger.warning("BFloat16 requested but GPU does not support it. Unsetting bfloat16.")
-                use_bfloat16 = False
-        logger.info(f"Loading model: {model_name}, DeepSpeed: {use_deepspeed}, bfloat16: {use_bfloat16}...") 
+
+    device = device if device is not None else "auto"
+ 
+    torch.set_default_device(device)
+    assert torch.cuda.is_available(), "CUDA not available."
+
+    if use_bfloat16:
+       gpu_properties = torch.cuda.get_device_properties(device=device)
+       if not gpu_properties.major >= 8:
+            logger.warning("BFloat16 requested but GPU does not support it. Unsetting bfloat16.")
+            use_bfloat16 = False
+    logger.info(f"Loading model: {model_name}, DeepSpeed: {use_deepspeed}, bfloat16: {use_bfloat16}...") 
     
     try:
         # Use local model path instead of downloading
@@ -73,15 +76,10 @@ def load_model(model_name=MODEL_NAME_DEFAULT, use_cpu=False, use_deepspeed=False
         
         model = Xtts.init_from_config(config)
         
-        if use_cpu:
-            model.load_checkpoint(config, checkpoint_dir=output_model_path)
-            model.cpu()
-            logger.info("Model loaded on CPU")
 
-        else:
-            model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
-            model.cuda()
-            logger.info("Model loaded on CUDA")
+        model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
+        model.to(device)
+        logger.info(f"Model loaded on {device}")
         
         logger.info("Model loading completed successfully")
         return model
@@ -217,7 +215,7 @@ def prepare_inference_params(temperature=0.7, top_p=1.0, top_k=50, speed=1.0,
 
 
 def initialize_model_with_cache(
-    use_cpu: bool = False, 
+    device: Optional[str] = None,
     seed: Optional[int] = None,
     validate: bool = True,
     use_deepspeed: bool = False,
@@ -240,7 +238,7 @@ def initialize_model_with_cache(
     logger.info("Starting model initialization...")
     
     try:
-        model = load_model(use_cpu=use_cpu, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
+        model = load_model(device=device, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
 
         setup_model_seed(seed)
         

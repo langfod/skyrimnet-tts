@@ -1,2 +1,2 @@
 @echo off
-call powershell -ExecutionPolicy Bypass -File 2_Start_XTTS.ps1 -deepspeed -bfloat16
+call powershell -ExecutionPolicy Bypass -File 2_Start_XTTS.ps1 -deepspeed -bfloat16 -device cuda:0

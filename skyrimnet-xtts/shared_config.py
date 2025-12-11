@@ -45,11 +45,11 @@ DEFAULT_CACHE_CONFIG = {
 
 # Default TTS inference parameters
 DEFAULT_TTS_PARAMS = {
-    "TEMPERATURE": 0.9,
-    "TOP_P": 1.0,
+    "TEMPERATURE": 0.75,
+    "TOP_P": 0.85,
     "TOP_K": 50,
     "SPEED": 1.0,
-    "REPETITION_PENALTY": 2.1
+    "REPETITION_PENALTY": 5.0
 }
 
 # Text splitting threshold per language (characters)

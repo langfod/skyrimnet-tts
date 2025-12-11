@@ -19,8 +19,8 @@ Enable multilingual text-to-speech mode
 Start XTTS in standard mode
 
 .EXAMPLE
-.\2_Start_XTTS.ps1 -cpu
-Start XTTS in standard mode using CPU only (no GPU)
+.\2_Start_XTTS.ps1 -device cuda:0
+Start XTTS in standard mode using specified device
 
 Notes:
 - If the venv python isn't found this script will try the system python in PATH.
@@ -28,7 +28,7 @@ Notes:
 #>
 
 param(
-    [switch]$cpu,
+    [string]$device = "cuda:0",
     [switch]$deepspeed,
     [switch]$bfloat16,
     [string]$server = "0.0.0.0",
@@ -114,9 +114,9 @@ if (-not (Test-Path $moduleToRun)) {
 
 # Build Python script arguments - use parameters with defaults
 $pythonArgs = "--server $server --port $port"
-if ($cpu) {
-    $pythonArgs = "$pythonArgs --use_cpu"
-    Write-Host "CPU mode enabled" -ForegroundColor Cyan
+if ($device) {
+    $pythonArgs = "$pythonArgs --device $device"
+    Write-Host "Device set to $device" -ForegroundColor Cyan
 }
 
 if ($deepspeed) {

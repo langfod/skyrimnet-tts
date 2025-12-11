@@ -5,6 +5,9 @@ param(
     [switch]$noclean
 )
 
+$env:CUDA_PATH = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9"
+$env:CUDA_PATH_V12_1 = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9"
+
 $PACKAGE_NAME = "SkyrimNet_XTTS"
 
 if (-not $nobuild -or $noclean) {
