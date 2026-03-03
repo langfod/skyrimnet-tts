@@ -44,7 +44,7 @@ frozenlist==1.7.0
 fsspec==2025.9.0
 fugashi==1.5.1
 g2pkk==0.1.2
-gradio==5.46.1
+gradio==6.7.0
 gradio_client==1.13.1
 groovy==0.1.2
 grpcio==1.75.0
@@ -150,7 +150,7 @@ thinc==8.3.6
 threadpoolctl==3.6.0
 tokenizers==0.21.4
 tomlkit==0.13.3
-torch==2.8.0+cu129
+torch==2.8.0
 torchaudio==2.8.0+cu129
 tqdm==4.67.1
 transformers==4.55.4

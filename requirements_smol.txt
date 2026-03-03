@@ -1,5 +1,5 @@
 --extra-index-url=https://download.pytorch.org/whl/cu121
-torch==2.1.1
+torch==2.8.0
 torchaudio
 nvidia-ml-py
 # Windows deepspeed build
@@ -25,7 +25,7 @@ loguru
 uvicorn
 transformers<4.54
 hf-xet
-gradio==5.49.1
+gradio==6.7.0
 
 
 ## Section added for TTS inclusion project.
